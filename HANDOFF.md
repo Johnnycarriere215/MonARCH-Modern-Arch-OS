@@ -1,7 +1,7 @@
 # HANDOFF
 
 Written 2026-07-31, at the end of the session that finished T2.
-Updated 2026-07-31, at the end of the session that finished T3.
+Updated 2026-07-31, at the end of the session that finished T4.
 
 This file is a **pointer, not a summary.** It deliberately does not restate the
 project — `MONARCH.md` and `PROGRESS.md` do that, and a second copy of the same
@@ -27,24 +27,26 @@ The repo is at `github.com/Johnnycarriere215/MonARCH-Modern-Arch-OS`, branch
 
 ## Where the build actually is
 
-**Phase 1 is code-complete, T3 is done on top of it, and none of it has ever
-been run on Arch.**
+**Phase 1 is code-complete, T3 and T4 are done on top of it, and none of it has
+ever been run on Arch.**
 
-T1 (bootstrap + package manifests), T2 (base config set) and T3 (theme engine)
-are all written, all locally verified, all marked `DONE` with the criteria that
-need real hardware honestly left unticked — chief among them: *the VM boots to
-a Hyprland desktop, logs in, and opens a terminal.*
+T1 (bootstrap + package manifests), T2 (base config set), T3 (theme engine) and
+T4 (keybinds) are all written, all locally verified, all marked `DONE` with the
+criteria that need real hardware honestly left unticked — chief among them:
+*the VM boots to a Hyprland desktop, logs in, and opens a terminal.*
 
 Everything written so far has been tested by simulation — fake `HOME`
 directories, syntax checks, install stages replayed twice against a throwaway
 home, mechanical validation that every theme variable resolves. None of it has
 met a real Arch install.
 
-The previous handoff said the next thing to happen should be the VM test rather
-than T3. T3 happened anyway. **That advice has not improved with age — it has
-got more urgent.** Three tasks now sit on a desktop that has never booted, and
-two pieces of T3 (Walker's and VS Code's theming) cannot be verified any other
-way. The next session should build the VM before it writes T4.
+The previous two handoffs both said the next thing to happen should be the VM
+test. It has not happened either time. **Four tasks now sit on a desktop that
+has never booted**, and the pieces that cannot be verified any other way keep
+accumulating: Walker's theming, VS Code's theming, and now every keybinding —
+no version of Hyprland has parsed a single line MonARCH generates.
+
+`docs/07-VM-TESTING.md` is the whole procedure, start to finish.
 
 Per-task detail, including every decision made and why, is in the **Notes**
 under each task in `PROGRESS.md`. Read those before touching a task's output.
@@ -126,13 +128,23 @@ file's own `#!` header; no code anywhere names an application. See
 a module that reports a state asks for meaning rather than colour, and a theme
 can decide that urgent is orange. T5's Waybar modules especially.
 
-**`config/.seed-only` (T4 must respect it).** Paths listed there are installed
-once by `monarch-config-apply` and never touched again — the user's settings,
-their monitor layout, and anything another `monarch` command generates. Without
-it, running `monarch config apply` after an update would silently undo
-`monarch theme apply`. **Anything a future task generates into `config/` must be
-listed there**, and T4 will need to overwrite the `bindings.conf` placeholder
-once, which a plain `config apply` will not do.
+**Generated files are not shipped.** T3 and T4 settled this the same way, and a
+later task should follow it: if `monarch` generates a file, it does not also
+live in `config/`. The palette and `bindings.conf` are both rendered by
+`install/30-config.sh` during the install, from `themes/_templates/` and
+`schema/keybinds.toml`. One producer, no checked-in copy to drift from it. Both
+stages are fatal on failure, because `hyprland.conf` sources both files.
+
+**`config/.seed-only`** still matters for the other case: things that are
+*yours*. Paths listed there are installed once by `monarch-config-apply` and
+never touched again — settings, monitor layout, `btop.conf` (btop rewrites it
+itself). **Anything a future task generates into `config/` must be listed
+there**, but better still, do not generate into `config/` at all.
+
+**The keymap.** `schema/keybinds.toml` is the source of truth;
+`~/.config/monarch/keybinds.toml` overrides it if it exists. `monarch keys
+list --porcelain` is tab-separated and is what T9's GUI panel should read —
+not the TOML, and not the pretty output.
 
 ---
 

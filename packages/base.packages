@@ -79,6 +79,7 @@ noto-fonts-cjk
 # ------------------------------------------------------------------ utilities
 nautilus                      # file manager
 wl-clipboard                  # wl-copy / wl-paste
+cliphist                      # clipboard history, shown through walker (SUPER+X)
 grim                          # screenshots
 slurp                         # region select, pairs with grim
 imv                           # image viewer

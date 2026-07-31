@@ -78,7 +78,18 @@ of those fails it says which. Everything is logged to
 4. **Log in to Hyprland. Press `Super+Return`.** A terminal should open. That is
    the bar Phase 1 has to clear.
 5. **`monarch doctor`** — built to be pasted. Paste it.
-6. **The theme engine** (T3, and the parts it cannot verify itself):
+6. **The keymap** (T4). `Super+/` should open a floating terminal listing every
+   binding. Then spot-check the ones with awkward quoting, which are the ones
+   most likely to have been generated wrong:
+   ```
+   Super+X        clipboard history through walker (needs cliphist installed)
+   Print          region screenshot to clipboard  (grim + slurp)
+   Super+grave    dropdown terminal
+   Super+Shift+W  next wallpaper (says so and does nothing if you have none)
+   ```
+   `monarch keys check` should report 65 bindings and no conflicts.
+
+7. **The theme engine** (T3, and the parts it cannot verify itself):
    ```bash
    monarch theme list
    monarch theme apply parchment    # the whole desktop should go light
@@ -87,6 +98,10 @@ of those fails it says which. Everything is logged to
    Specifically check: the Waybar colours change, the terminal colours change,
    a notification (`notify-send hello`) is themed, **and whether Walker
    (`Super`) is styled at all**. Walker is the one MonARCH is least sure of.
+
+8. **`monarch keys reset --yes`** and confirm the desktop still has keys. It is
+   the recovery path if a rebind goes wrong, so it is worth knowing it works
+   before you need it.
 
 ## 6. Most likely to break
 

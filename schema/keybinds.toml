@@ -1,0 +1,672 @@
+# MonARCH — the default keymap
+#
+# THIS IS THE SOURCE OF TRUTH. `~/.config/hypr/bindings.conf` is generated from
+# it by `monarch keys apply` and carries a DO NOT EDIT header. Editing the
+# generated file works until the next apply, and then it does not.
+#
+# Your copy lives at ~/.config/monarch/keybinds.toml. `monarch keys apply` reads
+# that if it exists and falls back to this file if it does not, so an update can
+# improve the defaults without touching a keymap you have changed.
+#
+#   monarch keys list          what is bound to what
+#   monarch keys check         duplicates and reserved combinations
+#   monarch keys apply         regenerate bindings.conf and reload Hyprland
+#   monarch keys reset         throw your copy away and start from these
+#
+# ─────────────────────────────────────────────────────────────────── fields ──
+#
+#   id           Stable identifier. NEVER changes, even if the key does — it is
+#                what the settings GUI stores a rebind against. Required, unique.
+#   keys         "MODS, KEY". Empty mods is a bare key: ", Print".
+#                Modifiers: SUPER CTRL ALT SHIFT. Order does not matter.
+#   dispatcher   "hyprctl" for a Hyprland dispatcher, "exec" to run a command.
+#   action       The dispatcher name (movefocus, killactive) or, for exec, the
+#                whole command line.
+#   args         Arguments to a Hyprland dispatcher. Unused when exec.
+#   group        Heading in `monarch keys list` and in the GUI.
+#   label        Human wording. This is what the GUI shows, not the action.
+#   editable     false = the GUI will not offer to rebind or remove it. For
+#                bindings where the key IS the feature (the bare Super tap) or
+#                where losing it locks you out (reload Hyprland).
+#   flags        Letters appended to `bind` in the generated file:
+#                  r  fires on RELEASE          (bindr)
+#                  e  repeats while held        (binde)
+#                  l  works while locked        (bindl)
+#                  m  mouse binding             (bindm)
+#                Combine them: "el" is bindel.
+#
+# ───────────────────────────────────────────────────────────────── variables ──
+#
+# Emitted at the top of the generated file as $name. Change your terminal in one
+# place rather than in six bindings.
+
+[vars]
+mod     = "SUPER"
+term    = "alacritty"
+browser = "chromium"
+files   = "nautilus"
+editor  = "code"
+
+# ══════════════════════════════════════════════════════════════════ launcher ══
+#
+# Locked decision: a bare Super tap opens Walker.
+#
+# `r` is what makes this work. It fires on RELEASE, so Super can still be held
+# as a modifier for everything below, and only a press-and-release with nothing
+# in between reaches the launcher. Not editable: unbind it and the launcher
+# becomes unreachable, which is a locked decision away from being a bug.
+
+[[bind]]
+id = "launcher"
+keys = "SUPER, SUPER_L"
+dispatcher = "exec"
+action = "walker"
+group = "Launcher"
+label = "Open the launcher"
+editable = false
+flags = "r"
+
+# ═════════════════════════════════════════════════════════════════════ launch ══
+
+[[bind]]
+id = "launch-terminal"
+keys = "SUPER, Return"
+dispatcher = "exec"
+action = "$term"
+group = "Launch"
+label = "Terminal"
+
+[[bind]]
+id = "launch-terminal-float"
+keys = "SUPER SHIFT, Return"
+dispatcher = "exec"
+action = "$term --class monarch-float"
+group = "Launch"
+label = "Terminal, floating"
+
+[[bind]]
+id = "launch-browser"
+keys = "SUPER, B"
+dispatcher = "exec"
+action = "$browser"
+group = "Launch"
+label = "Browser"
+
+[[bind]]
+id = "launch-files"
+keys = "SUPER, E"
+dispatcher = "exec"
+action = "$files"
+group = "Launch"
+label = "File manager"
+
+[[bind]]
+id = "launch-editor"
+keys = "SUPER, C"
+dispatcher = "exec"
+action = "$editor"
+group = "Launch"
+label = "Editor"
+
+# The workspace and its window rules are in config/hypr/monarch.conf. Locked
+# decision: a native special workspace, not pyprland.
+[[bind]]
+id = "dropdown-terminal"
+keys = "SUPER, grave"
+dispatcher = "hyprctl"
+action = "togglespecialworkspace"
+args = "dropdown"
+group = "Launch"
+label = "Dropdown terminal"
+
+# ═════════════════════════════════════════════════════════════════════ window ══
+
+[[bind]]
+id = "close-window"
+keys = "SUPER, Q"
+dispatcher = "hyprctl"
+action = "killactive"
+group = "Windows"
+label = "Close window"
+
+[[bind]]
+id = "toggle-floating"
+keys = "SUPER, V"
+dispatcher = "hyprctl"
+action = "togglefloating"
+group = "Windows"
+label = "Float / unfloat"
+
+[[bind]]
+id = "fullscreen"
+keys = "SUPER, F"
+dispatcher = "hyprctl"
+action = "fullscreen"
+args = "0"
+group = "Windows"
+label = "Fullscreen"
+
+[[bind]]
+id = "maximize"
+keys = "SUPER SHIFT, F"
+dispatcher = "hyprctl"
+action = "fullscreen"
+args = "1"
+group = "Windows"
+label = "Maximize (keep the bar)"
+
+[[bind]]
+id = "pseudo-tile"
+keys = "SUPER, P"
+dispatcher = "hyprctl"
+action = "pseudo"
+group = "Windows"
+label = "Pseudo-tile"
+
+[[bind]]
+id = "toggle-split"
+keys = "SUPER, J"
+dispatcher = "hyprctl"
+action = "togglesplit"
+group = "Windows"
+label = "Flip the split direction"
+
+# Focus: arrows and hjkl both, because muscle memory differs by mood. Note
+# there is no SUPER+L for focus-right — that is the lock screen on every other
+# desktop and the muscle memory for it is stronger than vim's. Right is on the
+# arrow key and on SUPER+semicolon.
+
+[[bind]]
+id = "focus-left"
+keys = "SUPER, left"
+dispatcher = "hyprctl"
+action = "movefocus"
+args = "l"
+group = "Focus"
+label = "Focus left"
+
+[[bind]]
+id = "focus-right"
+keys = "SUPER, right"
+dispatcher = "hyprctl"
+action = "movefocus"
+args = "r"
+group = "Focus"
+label = "Focus right"
+
+[[bind]]
+id = "focus-up"
+keys = "SUPER, up"
+dispatcher = "hyprctl"
+action = "movefocus"
+args = "u"
+group = "Focus"
+label = "Focus up"
+
+[[bind]]
+id = "focus-down"
+keys = "SUPER, down"
+dispatcher = "hyprctl"
+action = "movefocus"
+args = "d"
+group = "Focus"
+label = "Focus down"
+
+[[bind]]
+id = "focus-left-vim"
+keys = "SUPER, H"
+dispatcher = "hyprctl"
+action = "movefocus"
+args = "l"
+group = "Focus"
+label = "Focus left (vim)"
+
+[[bind]]
+id = "focus-right-vim"
+keys = "SUPER, semicolon"
+dispatcher = "hyprctl"
+action = "movefocus"
+args = "r"
+group = "Focus"
+label = "Focus right (vim)"
+
+[[bind]]
+id = "focus-up-vim"
+keys = "SUPER, K"
+dispatcher = "hyprctl"
+action = "movefocus"
+args = "u"
+group = "Focus"
+label = "Focus up (vim)"
+
+# SUPER+J is the split toggle above, so focus-down-vim has no vim key. Left as a
+# deliberate gap rather than shuffling two well-known bindings to close it.
+
+[[bind]]
+id = "move-window-left"
+keys = "SUPER SHIFT, left"
+dispatcher = "hyprctl"
+action = "movewindow"
+args = "l"
+group = "Windows"
+label = "Move window left"
+
+[[bind]]
+id = "move-window-right"
+keys = "SUPER SHIFT, right"
+dispatcher = "hyprctl"
+action = "movewindow"
+args = "r"
+group = "Windows"
+label = "Move window right"
+
+[[bind]]
+id = "move-window-up"
+keys = "SUPER SHIFT, up"
+dispatcher = "hyprctl"
+action = "movewindow"
+args = "u"
+group = "Windows"
+label = "Move window up"
+
+[[bind]]
+id = "move-window-down"
+keys = "SUPER SHIFT, down"
+dispatcher = "hyprctl"
+action = "movewindow"
+args = "d"
+group = "Windows"
+label = "Move window down"
+
+# Held, so one press-and-hold resizes smoothly instead of stepping.
+
+[[bind]]
+id = "resize-left"
+keys = "SUPER CTRL, left"
+dispatcher = "hyprctl"
+action = "resizeactive"
+args = "-40 0"
+group = "Windows"
+label = "Shrink horizontally"
+flags = "e"
+
+[[bind]]
+id = "resize-right"
+keys = "SUPER CTRL, right"
+dispatcher = "hyprctl"
+action = "resizeactive"
+args = "40 0"
+group = "Windows"
+label = "Grow horizontally"
+flags = "e"
+
+[[bind]]
+id = "resize-up"
+keys = "SUPER CTRL, up"
+dispatcher = "hyprctl"
+action = "resizeactive"
+args = "0 -40"
+group = "Windows"
+label = "Shrink vertically"
+flags = "e"
+
+[[bind]]
+id = "resize-down"
+keys = "SUPER CTRL, down"
+dispatcher = "hyprctl"
+action = "resizeactive"
+args = "0 40"
+group = "Windows"
+label = "Grow vertically"
+flags = "e"
+
+[[bind]]
+id = "mouse-move-window"
+keys = "SUPER, mouse:272"
+dispatcher = "hyprctl"
+action = "movewindow"
+group = "Windows"
+label = "Drag to move"
+flags = "m"
+
+[[bind]]
+id = "mouse-resize-window"
+keys = "SUPER, mouse:273"
+dispatcher = "hyprctl"
+action = "resizewindow"
+group = "Windows"
+label = "Drag to resize"
+flags = "m"
+
+# ═════════════════════════════════════════════════════════════════ workspaces ══
+#
+# Locked decision: 5 persistent workspaces (see config/hypr/monarch.conf), with
+# a 6th created by the binding below and destroyed by Hyprland when its last
+# window closes.
+
+[[bind]]
+id = "workspace-1"
+keys = "SUPER, 1"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "1"
+group = "Workspaces"
+label = "Go to workspace 1"
+
+[[bind]]
+id = "workspace-2"
+keys = "SUPER, 2"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "2"
+group = "Workspaces"
+label = "Go to workspace 2"
+
+[[bind]]
+id = "workspace-3"
+keys = "SUPER, 3"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "3"
+group = "Workspaces"
+label = "Go to workspace 3"
+
+[[bind]]
+id = "workspace-4"
+keys = "SUPER, 4"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "4"
+group = "Workspaces"
+label = "Go to workspace 4"
+
+[[bind]]
+id = "workspace-5"
+keys = "SUPER, 5"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "5"
+group = "Workspaces"
+label = "Go to workspace 5"
+
+[[bind]]
+id = "workspace-6"
+keys = "SUPER, 6"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "6"
+group = "Workspaces"
+label = "Go to workspace 6 (created on demand)"
+
+[[bind]]
+id = "move-to-workspace-1"
+keys = "SUPER SHIFT, 1"
+dispatcher = "hyprctl"
+action = "movetoworkspace"
+args = "1"
+group = "Workspaces"
+label = "Move window to workspace 1"
+
+[[bind]]
+id = "move-to-workspace-2"
+keys = "SUPER SHIFT, 2"
+dispatcher = "hyprctl"
+action = "movetoworkspace"
+args = "2"
+group = "Workspaces"
+label = "Move window to workspace 2"
+
+[[bind]]
+id = "move-to-workspace-3"
+keys = "SUPER SHIFT, 3"
+dispatcher = "hyprctl"
+action = "movetoworkspace"
+args = "3"
+group = "Workspaces"
+label = "Move window to workspace 3"
+
+[[bind]]
+id = "move-to-workspace-4"
+keys = "SUPER SHIFT, 4"
+dispatcher = "hyprctl"
+action = "movetoworkspace"
+args = "4"
+group = "Workspaces"
+label = "Move window to workspace 4"
+
+[[bind]]
+id = "move-to-workspace-5"
+keys = "SUPER SHIFT, 5"
+dispatcher = "hyprctl"
+action = "movetoworkspace"
+args = "5"
+group = "Workspaces"
+label = "Move window to workspace 5"
+
+[[bind]]
+id = "move-to-workspace-6"
+keys = "SUPER SHIFT, 6"
+dispatcher = "hyprctl"
+action = "movetoworkspace"
+args = "6"
+group = "Workspaces"
+label = "Move window to workspace 6"
+
+[[bind]]
+id = "workspace-next"
+keys = "SUPER, Tab"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "e+1"
+group = "Workspaces"
+label = "Next workspace"
+
+[[bind]]
+id = "workspace-prev"
+keys = "SUPER SHIFT, Tab"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "e-1"
+group = "Workspaces"
+label = "Previous workspace"
+
+[[bind]]
+id = "workspace-scroll-next"
+keys = "SUPER, mouse_down"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "e+1"
+group = "Workspaces"
+label = "Scroll to the next workspace"
+
+[[bind]]
+id = "workspace-scroll-prev"
+keys = "SUPER, mouse_up"
+dispatcher = "hyprctl"
+action = "workspace"
+args = "e-1"
+group = "Workspaces"
+label = "Scroll to the previous workspace"
+
+# ═════════════════════════════════════════════════════════════════════ system ══
+
+[[bind]]
+id = "lock"
+keys = "SUPER, Escape"
+dispatcher = "exec"
+action = "hyprlock"
+group = "System"
+label = "Lock the screen"
+
+[[bind]]
+id = "logout"
+keys = "SUPER SHIFT, Escape"
+dispatcher = "hyprctl"
+action = "exit"
+group = "System"
+label = "Log out of Hyprland"
+
+# Not editable: this is the way back from a bad config, including a bad keymap.
+[[bind]]
+id = "reload-hyprland"
+keys = "SUPER SHIFT, R"
+dispatcher = "exec"
+action = "hyprctl reload"
+group = "System"
+label = "Reload Hyprland"
+editable = false
+
+[[bind]]
+id = "keybind-help"
+keys = "SUPER, slash"
+dispatcher = "exec"
+action = "$term --class monarch-float -e bash -c 'monarch keys list; read -n1 -s'"
+group = "System"
+label = "Show this list"
+
+# ════════════════════════════════════════════════════════════════ screenshot ══
+#
+# grim writes the image, slurp picks the region. Region-to-clipboard is the one
+# people reach for, so it gets the bare Print key.
+
+[[bind]]
+id = "screenshot-region"
+keys = ", Print"
+dispatcher = "exec"
+action = "grim -g \"$(slurp)\" - | wl-copy"
+group = "Screenshot"
+label = "Region to clipboard"
+
+[[bind]]
+id = "screenshot-screen"
+keys = "SHIFT, Print"
+dispatcher = "exec"
+action = "grim - | wl-copy"
+group = "Screenshot"
+label = "Whole screen to clipboard"
+
+[[bind]]
+id = "screenshot-region-file"
+keys = "SUPER, Print"
+dispatcher = "exec"
+action = "grim -g \"$(slurp)\" \"$HOME/Pictures/$(date +%Y-%m-%d_%H-%M-%S).png\""
+group = "Screenshot"
+label = "Region to ~/Pictures"
+
+# ══════════════════════════════════════════════════════════════════ clipboard ══
+#
+# cliphist keeps the history; walker shows it. Both are already running.
+
+[[bind]]
+id = "clipboard-history"
+keys = "SUPER, X"
+dispatcher = "exec"
+action = "cliphist list | walker --dmenu | cliphist decode | wl-copy"
+group = "Clipboard"
+label = "Clipboard history"
+
+[[bind]]
+id = "clipboard-clear"
+keys = "SUPER SHIFT, X"
+dispatcher = "exec"
+action = "cliphist wipe"
+group = "Clipboard"
+label = "Clear the clipboard history"
+
+# ══════════════════════════════════════════════════════════════════════ media ══
+#
+# `l` on all of these: they work while the screen is locked, which is the whole
+# point of a volume key. `e` on volume and brightness so holding one ramps.
+
+[[bind]]
+id = "volume-up"
+keys = ", XF86AudioRaiseVolume"
+dispatcher = "exec"
+action = "wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+"
+group = "Media"
+label = "Volume up"
+flags = "el"
+
+[[bind]]
+id = "volume-down"
+keys = ", XF86AudioLowerVolume"
+dispatcher = "exec"
+action = "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+group = "Media"
+label = "Volume down"
+flags = "el"
+
+[[bind]]
+id = "volume-mute"
+keys = ", XF86AudioMute"
+dispatcher = "exec"
+action = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+group = "Media"
+label = "Mute"
+flags = "l"
+
+[[bind]]
+id = "mic-mute"
+keys = ", XF86AudioMicMute"
+dispatcher = "exec"
+action = "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"
+group = "Media"
+label = "Mute the microphone"
+flags = "l"
+
+[[bind]]
+id = "media-play-pause"
+keys = ", XF86AudioPlay"
+dispatcher = "exec"
+action = "playerctl play-pause"
+group = "Media"
+label = "Play / pause"
+flags = "l"
+
+[[bind]]
+id = "media-next"
+keys = ", XF86AudioNext"
+dispatcher = "exec"
+action = "playerctl next"
+group = "Media"
+label = "Next track"
+flags = "l"
+
+[[bind]]
+id = "media-prev"
+keys = ", XF86AudioPrev"
+dispatcher = "exec"
+action = "playerctl previous"
+group = "Media"
+label = "Previous track"
+flags = "l"
+
+[[bind]]
+id = "brightness-up"
+keys = ", XF86MonBrightnessUp"
+dispatcher = "exec"
+action = "brightnessctl set 5%+"
+group = "Media"
+label = "Brightness up"
+flags = "el"
+
+[[bind]]
+id = "brightness-down"
+keys = ", XF86MonBrightnessDown"
+dispatcher = "exec"
+action = "brightnessctl set 5%-"
+group = "Media"
+label = "Brightness down"
+flags = "el"
+
+# Lid close and the power button are systemd-logind's, not Hyprland's.
+
+# ═════════════════════════════════════════════════════════════════ appearance ══
+
+[[bind]]
+id = "background-next"
+keys = "SUPER SHIFT, W"
+dispatcher = "exec"
+action = "monarch background next"
+group = "Appearance"
+label = "Next wallpaper"

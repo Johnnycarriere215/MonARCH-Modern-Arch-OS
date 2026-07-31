@@ -56,6 +56,21 @@ stage_30_apply_theme() {
     || die "could not render theme '$theme'"
 }
 
+stage_30_apply_keys() {
+  # bindings.conf is generated, for the same reason the palette is: one
+  # producer, no shipped copy to drift from it. Fatal on failure — hyprland.conf
+  # sources bindings.conf, and a session you cannot open a terminal in is not a
+  # session.
+  local apply="$MONARCH_HOME/bin/monarch-keys-apply"
+  [[ -x "$apply" ]] || die "missing $apply — cannot generate keybindings"
+
+  info "Generating keybindings"
+  # --no-reload for the same reason as the theme: on a re-run hyprctl would be
+  # poking the session the installer is sitting inside.
+  MONARCH_HOME="$MONARCH_HOME" "$apply" --no-reload \
+    || die "could not generate keybindings"
+}
+
 stage_30_link_cli() {
   local bindir="$HOME/.local/bin"
   info "Linking the monarch CLI into $bindir"
@@ -99,6 +114,7 @@ stage_30_config() {
   # After the deploy: settings.toml has to exist before we can read a theme
   # name out of it.
   stage_30_apply_theme
+  stage_30_apply_keys
   stage_30_link_cli
   stage_30_path
 }

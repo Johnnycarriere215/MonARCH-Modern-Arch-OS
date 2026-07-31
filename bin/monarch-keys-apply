@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+#DESC: Generate bindings.conf from keybinds.toml and reload Hyprland
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_keys-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Regenerate ~/.config/hypr/bindings.conf from the keymap.
+
+Usage:
+  monarch keys apply [--dry-run] [--no-reload]
+
+  --dry-run     print what would be written, change nothing
+  --no-reload   write the file but do not reload Hyprland
+
+Source, in order of preference:
+
+  ~/.config/monarch/keybinds.toml    yours, if it exists
+  <repo>/schema/keybinds.toml        the defaults
+
+The generated file carries a DO NOT EDIT header, because it is regenerated
+whole. Edit the source, not the output. `monarch keys check` runs first and
+this refuses to write on a conflict — a keymap that has lost you your terminal
+is not a thing to find out about after the reload.
+EOF
+}
+
+DRY_RUN=false
+RELOAD=true
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)   usage; exit 0 ;;
+      --dry-run)   DRY_RUN=true ;;
+      --no-reload) RELOAD=false ;;
+      *) err "unknown argument: $1"; printf '\n'; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+
+  local source; source=$(keybinds_source)
+  [[ -f "$source" ]] || die "no keymap: $source is missing"
+
+  # Check before generating, not after. The check loads the file itself, so a
+  # parse error is reported once, there, in its own words.
+  "$MONARCH_HOME/bin/monarch-keys-check" "$source" --quiet \
+    || die "keymap has conflicts — nothing written"
+
+  keybinds_load "$source" || exit 1
+
+  local rendered; rendered=$(bindings_render "$source")
+
+  if [[ "$DRY_RUN" == true ]]; then
+    printf '%s\n' "$rendered"
+    exit 0
+  fi
+
+  if [[ -f "$MONARCH_BINDINGS_OUT" ]] \
+     && [[ "$(<"$MONARCH_BINDINGS_OUT")" == "$rendered" ]]; then
+    ok "${#BIND_ID[@]} bindings, already current"
+    exit 0
+  fi
+
+  mkdir -p "$(dirname "$MONARCH_BINDINGS_OUT")"
+  # Same temp-then-move as the theme engine: Hyprland must never read a half
+  # written keymap, and it does read this file on its own when told to reload.
+  local tmp="$MONARCH_BINDINGS_OUT.monarch-tmp"
+  printf '%s\n' "$rendered" >"$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$MONARCH_BINDINGS_OUT"
+
+  ok "${#BIND_ID[@]} bindings -> ${MONARCH_BINDINGS_OUT/#$HOME/\~}"
+
+  if [[ "$RELOAD" == true ]] \
+     && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && have hyprctl; then
+    hyprctl reload >/dev/null 2>&1 && step "reloaded Hyprland"
+  fi
+}
+
+main "$@"

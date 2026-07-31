@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#DESC: Throw away your keymap changes and go back to the defaults
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_keys-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Restore the default keymap.
+
+Usage:
+  monarch keys reset [--yes] [--no-apply]
+
+  --yes        do not ask
+  --no-apply   restore the file but do not regenerate bindings.conf
+
+Your ~/.config/monarch/keybinds.toml is moved to keybinds.toml.bak — not
+deleted — and removed, so `monarch keys apply` falls back to the shipped
+defaults again and keeps tracking them as they improve.
+EOF
+}
+
+ASSUME_YES=false
+APPLY=true
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)  usage; exit 0 ;;
+      -y|--yes)   ASSUME_YES=true ;;
+      --no-apply) APPLY=false ;;
+      *) err "unknown argument: $1"; printf '\n'; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+
+  if [[ ! -f "$MONARCH_KEYBINDS_USER" ]]; then
+    ok "already on the defaults — you have no keymap of your own"
+    exit 0
+  fi
+
+  # Worth knowing before you answer: how far from the defaults you actually are.
+  local yours theirs
+  yours=$(grep -c '^\[\[bind\]\]' "$MONARCH_KEYBINDS_USER" || true)
+  theirs=$(grep -c '^\[\[bind\]\]' "$MONARCH_KEYBINDS_DEFAULT" || true)
+  info "yours: $yours bindings · defaults: $theirs bindings"
+
+  if [[ "$ASSUME_YES" == false ]]; then
+    printf 'Restore the default keymap? Yours is kept as keybinds.toml.bak [y/N] '
+    local reply; read -r reply
+    [[ "$reply" =~ ^[Yy] ]] || { info "left alone"; exit 0; }
+  fi
+
+  mv -f "$MONARCH_KEYBINDS_USER" "$MONARCH_KEYBINDS_USER.bak"
+  ok "yours -> ${MONARCH_KEYBINDS_USER/#$HOME/\~}.bak"
+
+  if [[ "$APPLY" == true ]]; then
+    exec "$MONARCH_HOME/bin/monarch-keys-apply"
+  fi
+
+  info "run 'monarch keys apply' to put the defaults into effect"
+}
+
+main "$@"

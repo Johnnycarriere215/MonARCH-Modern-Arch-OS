@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+#DESC: Check the keymap for duplicate and reserved key combinations
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_keys-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Check the keymap before it is generated.
+
+Usage:
+  monarch keys check [<file>] [--quiet]
+
+  <file>    check a specific keybinds.toml instead of the active one
+  --quiet   say nothing unless something is wrong
+
+Exit 1 if anything is wrong. `monarch keys apply` runs this first and refuses
+to write on a conflict, so a broken keymap cannot reach Hyprland.
+
+What counts as wrong
+
+  duplicate id        ids are how the GUI stores a rebind; two is ambiguous
+  duplicate keys      the second binding silently never fires
+  reserved combo      the compositor or the kernel takes it first
+
+What counts as a warning (does not block)
+
+  a modifier-less letter key, which will fire while you are typing
+EOF
+}
+
+FILE=""
+QUIET=false
+
+# Combinations something below Hyprland claims. Hyprland has no built-in
+# keymap of its own — an unconfigured session has no bindings at all — so this
+# is about the layers underneath it.
+#
+# Normalised form: modifiers sorted alphabetically, upper case, '+' separated.
+reserved_reason() {
+  local combo=$1
+
+  # The kernel's virtual terminal switch. Bound in Hyprland it appears to work
+  # and then drops you to a TTY the first time you use it in a nested session.
+  [[ "$combo" =~ ^ALT\+CTRL\+F([1-9]|1[0-2])$ ]] && {
+    printf 'the kernel uses this to switch virtual terminals'; return 0; }
+
+  # Reaching XKB, not the compositor.
+  [[ "$combo" == "ALT+CTRL+BACKSPACE" ]] && {
+    printf 'X/XKB terminate-server combination'; return 0; }
+
+  return 1
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --quiet)   QUIET=true ;;
+      -*)        err "unknown option: $1"; exit 1 ;;
+      *)         [[ -z "$FILE" ]] || die "one file at a time"; FILE=$1 ;;
+    esac
+    shift
+  done
+
+  [[ -n "$FILE" ]] || FILE=$(keybinds_source)
+  keybinds_load "$FILE" || exit 1
+
+  local -A seen_id=() seen_combo=()
+  local problems=0 warnings=0
+  local i combo reason
+
+  for i in "${!BIND_ID[@]}"; do
+    local id=${BIND_ID[i]}
+
+    # ---- duplicate id ------------------------------------------------------
+    if [[ -v seen_id[$id] ]]; then
+      err "duplicate id '$id'"
+      printf "        also used by binding #%s\n" "${seen_id[$id]}" >&2
+      problems=$((problems + 1))
+    else
+      seen_id["$id"]=$((i + 1))
+    fi
+
+    # ---- duplicate combination ---------------------------------------------
+    combo=$(combo_normalise "${BIND_KEYS[i]}")
+
+    # A mouse binding and a key binding can share a combination: bindm is a
+    # drag, not a press, and Hyprland keeps them apart.
+    [[ "${BIND_FLAGS[i]}" == *m* ]] && combo="MOUSE:$combo"
+
+    if [[ -v seen_combo[$combo] ]]; then
+      err "$(combo_display "${BIND_KEYS[i]}") is bound twice"
+      printf "        '%s' and '%s' — the second one never fires\n" \
+        "${seen_combo[$combo]}" "$id" >&2
+      problems=$((problems + 1))
+    else
+      seen_combo["$combo"]=$id
+    fi
+
+    # ---- reserved ----------------------------------------------------------
+    if reason=$(reserved_reason "$(combo_normalise "${BIND_KEYS[i]}")"); then
+      err "$(combo_display "${BIND_KEYS[i]}") ('$id') is reserved"
+      printf "        %s\n" "$reason" >&2
+      problems=$((problems + 1))
+    fi
+
+    # ---- bare letter -------------------------------------------------------
+    # ", Print" and ", XF86AudioPlay" are fine — dedicated keys. A bare letter
+    # or digit is not: it fires in the middle of typing.
+    local mods=${BIND_KEYS[i]%%,*}
+    local key=${BIND_KEYS[i]#*,}
+    mods=${mods//[[:space:]]/}
+    key=${key//[[:space:]]/}
+    if [[ -z "$mods" && "$key" =~ ^[A-Za-z0-9]$ ]]; then
+      warn "$(combo_display "${BIND_KEYS[i]}") ('$id') has no modifier — it will fire while you type"
+      warnings=$((warnings + 1))
+    fi
+  done
+
+  if [[ $problems -gt 0 ]]; then
+    printf '\n' >&2
+    err "$problems problem(s) in ${FILE/#$HOME/\~}"
+    exit 1
+  fi
+
+  if [[ "$QUIET" == false ]]; then
+    local msg="${#BIND_ID[@]} bindings, no conflicts"
+    [[ $warnings -gt 0 ]] && msg+=" ($warnings warning(s))"
+    ok "$msg"
+  fi
+}
+
+main "$@"

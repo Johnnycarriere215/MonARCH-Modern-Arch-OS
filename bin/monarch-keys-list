@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+#DESC: Show every keybinding, grouped
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_keys-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Show the keymap.
+
+Usage:
+  monarch keys list [--group <name>] [--search <text>] [--porcelain]
+
+  --group      one group only (Windows, Workspaces, Launch, ...)
+  --search     bindings whose label, id or keys contain this text
+  --porcelain  tab-separated, one binding per line, for the GUI:
+               id, keys, label, group, dispatcher, action, args, editable, flags
+
+This is what SUPER+/ shows. Never hand-written — golden rule: hotkey
+documentation is generated from the keymap or it is wrong within a week.
+EOF
+}
+
+GROUP=""
+SEARCH=""
+PORCELAIN=false
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)   usage; exit 0 ;;
+      --group)     GROUP=${2:-}; [[ -n "$GROUP" ]] || die "--group needs a value"; shift ;;
+      --search)    SEARCH=${2:-}; [[ -n "$SEARCH" ]] || die "--search needs a value"; shift ;;
+      --porcelain) PORCELAIN=true ;;
+      *) err "unknown argument: $1"; printf '\n'; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+
+  local source; source=$(keybinds_source)
+  keybinds_load "$source" || exit 1
+
+  # Which records survive the filters, in file order.
+  local keep=() i
+  for i in "${!BIND_ID[@]}"; do
+    if [[ -n "$GROUP" ]]; then
+      [[ "${BIND_GROUP[i],,}" == "${GROUP,,}" ]] || continue
+    fi
+    if [[ -n "$SEARCH" ]]; then
+      local haystack="${BIND_LABEL[i]} ${BIND_ID[i]} ${BIND_KEYS[i]}"
+      [[ "${haystack,,}" == *"${SEARCH,,}"* ]] || continue
+    fi
+    keep+=("$i")
+  done
+
+  if [[ ${#keep[@]} -eq 0 ]]; then
+    [[ "$PORCELAIN" == true ]] && exit 0
+    warn "nothing matches"
+    exit 1
+  fi
+
+  if [[ "$PORCELAIN" == true ]]; then
+    for i in "${keep[@]}"; do
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "${BIND_ID[i]}" "${BIND_KEYS[i]}" "${BIND_LABEL[i]}" "${BIND_GROUP[i]}" \
+        "${BIND_DISPATCHER[i]}" "${BIND_ACTION[i]}" "${BIND_ARGS[i]}" \
+        "${BIND_EDITABLE[i]}" "${BIND_FLAGS[i]}"
+    done
+    exit 0
+  fi
+
+  # Column width from the widest combination actually being shown, so a filtered
+  # list is not padded out to the width of a binding it is not showing.
+  local width=0 shown
+  for i in "${keep[@]}"; do
+    shown=$(combo_display "${BIND_KEYS[i]}")
+    [[ ${#shown} -gt $width ]] && width=${#shown}
+  done
+
+  printf '%sMonARCH keybindings%s  %s%s%s\n\n' \
+    "$C_BOLD" "$C_RESET" "$C_DIM" "${source/#$HOME/\~}" "$C_RESET"
+
+  local groups=() seen=" " g
+  for i in "${keep[@]}"; do
+    g=${BIND_GROUP[i]}
+    [[ "$seen" == *" $g "* ]] && continue
+    groups+=("$g"); seen+="$g "
+  done
+
+  for g in "${groups[@]}"; do
+    printf '%s%s%s\n' "$C_BOLD" "$g" "$C_RESET"
+    for i in "${keep[@]}"; do
+      [[ "${BIND_GROUP[i]}" == "$g" ]] || continue
+      printf '  %-*s  %s\n' "$width" "$(combo_display "${BIND_KEYS[i]}")" "${BIND_LABEL[i]}"
+    done
+    printf '\n'
+  done
+
+  printf '%s%s bindings · change them with the settings GUI, or edit %s%s\n' \
+    "$C_DIM" "${#keep[@]}" "${source/#$HOME/\~}" "$C_RESET"
+}
+
+main "$@"
