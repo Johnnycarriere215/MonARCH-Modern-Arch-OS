@@ -184,7 +184,7 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 - [x] Windows mode gives title bars, close buttons, floating default, bottom bar, taskbar
 - [x] Minimize = `movetoworkspacesilent special:minimized`, restore via `wlr/taskbar`
 - [x] **`hyprbars` failure falls back to tiling with a clear warning** — exercised: with no `hyprpm` on this box, `mode set windows` warns, explains the pinned-version problem, lands in tiling and exits 1
-- [x] No `if mode == ...` anywhere. Modes are data — grep the tree; the word "windows" appears in no script
+- [x] No `if mode == ...` anywhere. Modes are data — no script names a mode. One near-miss: `current_variant` in `monarch-bar-modules` matches `*performance*`, but that is T5's **bar variant** filename, not a mode; the two happen to share a word
 
 **Notes:**
 
