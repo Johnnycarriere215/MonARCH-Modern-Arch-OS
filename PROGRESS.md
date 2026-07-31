@@ -21,7 +21,7 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 |---|---|---|
 | 0.1 | Back up `~` to external media | TODO |
 | 0.2 | BIOS: Secure Boot off, TPM off, VT-x on, VT-d on | TODO |
-| 0.3 | GitHub repo `monarch` created, starter committed, MIT `LICENSE` added | PARTIAL — repo exists, `LICENSE` added; starter is in the working tree but **not committed or pushed yet** |
+| 0.3 | GitHub repo `monarch` created, starter committed, MIT `LICENSE` added | DONE — pushed to `main` 2026-07-31, so the raw-URL curl path in `bootstrap.sh` works |
 | 0.4 | Arch VM built — 12GB RAM, 4 CPUs, 80GB disk, UEFI/OVMF, virtio + 3D accel, **Btrfs root** | TODO |
 | 0.5 | VM snapshot `clean-arch` taken **right after base Arch install, before MonARCH** | TODO |
 | 0.6 | USB drive identified (`lsblk -o NAME,MODEL,TRAN,SIZE,ROTA` with it plugged in) | TODO |
