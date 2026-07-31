@@ -1,0 +1,11 @@
+# Backups made by monarch-config-apply
+*.bak
+
+# Tauri / GUI build output
+gui/target/
+gui/node_modules/
+gui/dist/
+
+# Editor and OS noise
+.DS_Store
+*.swp

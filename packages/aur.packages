@@ -1,0 +1,19 @@
+# MonARCH — AUR packages
+#
+# Installed by install/20-packages.sh via paru, after base.packages.
+# Same format as base.packages: one per line, '#' starts a comment.
+#
+# AUR builds can fail for reasons outside our control. 20-packages.sh installs
+# these one at a time and warns on failure rather than aborting the install.
+
+walker-bin                    # launcher. Not in the official repos, hence AUR
+visual-studio-code-bin        # locked decision: VS Code is the editor
+github-desktop-bin
+nwg-displays                  # GUI monitor arrangement, writes monitors.conf
+claude-desktop                # needs CLAUDE_USE_WAYLAND=1 and /dev/kvm — see T8
+
+# NOT listed here on purpose:
+#   hyprbars  — a Hyprland plugin, installed through `hyprpm add`, not the AUR.
+#               Set up in T6 (Windows mode), which owns its failure handling.
+#   google-chrome, spotify, typora — never bundled. Shipped as one-click
+#               installers (monarch-install-*), per golden rule 7.

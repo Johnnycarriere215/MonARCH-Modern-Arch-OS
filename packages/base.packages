@@ -1,0 +1,93 @@
+# MonARCH — base packages
+#
+# Installed by install/20-packages.sh on every machine. Official repos only;
+# anything from the AUR belongs in aur.packages.
+#
+# Format: one package per line. Blank lines and everything from a '#' to end
+# of line are ignored, so trailing comments are fine.
+
+# ---------------------------------------------------------------- compositor
+hyprland
+hyprlock                      # screen lock
+hypridle                      # idle daemon that drives hyprlock
+mako                          # notifications
+waybar
+xdg-desktop-portal-hyprland   # screenshare, file pickers
+xdg-desktop-portal-gtk        # GTK portal backend the Hyprland one falls back to
+polkit
+polkit-gnome                  # graphical auth prompts
+qt5-wayland
+qt6-wayland
+# NOTE: walker (launcher) is not in the official repos — see aur.packages
+
+# ---------------------------------------------------------- terminal + shell
+alacritty
+bash
+starship
+tmux
+
+# ------------------------------------------------------------------ core CLI
+git
+fzf
+ripgrep
+zoxide
+bat
+eza
+jq
+btop
+fastfetch
+curl
+wget
+less
+man-db
+openssh
+unzip
+
+# -------------------------------------------------------------------- system
+base-devel                    # required to build AUR packages (paru)
+sudo
+greetd
+greetd-tuigreet               # the login screen MonARCH ships
+snapper                       # Btrfs snapshots
+snap-pac                      # snapshot automatically around pacman transactions
+btrfs-progs
+limine                        # bootloader; integrates with snapper
+zram-generator                # compressed swap in RAM
+networkmanager
+bluez
+bluez-utils
+ufw                           # firewall, configured in install/40-services.sh
+brightnessctl
+playerctl
+pacman-contrib                # paccache, checkupdates
+reflector                     # mirror ranking
+
+# ------------------------------------------------------------------- pipewire
+pipewire
+pipewire-alsa
+pipewire-pulse
+pipewire-jack
+wireplumber
+
+# ---------------------------------------------------------------------- fonts
+ttf-jetbrains-mono-nerd
+noto-fonts
+noto-fonts-emoji
+noto-fonts-cjk
+
+# ------------------------------------------------------------------ utilities
+nautilus                      # file manager
+wl-clipboard                  # wl-copy / wl-paste
+grim                          # screenshots
+slurp                         # region select, pairs with grim
+imv                           # image viewer
+mpv                           # video
+chromium                      # ships by default; Chrome is a separate installer
+
+# ------------------------------------------------------------------- graphics
+# Intel UHD 620 target — no NVIDIA, no hybrid graphics.
+mesa
+vulkan-intel
+intel-media-driver            # VA-API on Gen8+
+libva-utils                   # vainfo, for monarch-doctor
+intel-gpu-tools               # intel_gpu_top, used by the T5 Waybar GPU module

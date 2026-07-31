@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p z1 z2)",
+      "Bash(unzip -o -q \"/home/johnnylaine/Downloads/monarch-starter.zip\" -d z1)",
+      "Bash(unzip -o -q \"/home/johnnylaine/Downloads/monarch-starter \\(1\\).zip\" -d z2)"
+    ]
+  }
+}

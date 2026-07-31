@@ -1,0 +1,35 @@
+# MonARCH — optional packages
+#
+# NOT installed by bootstrap.sh. This is the menu the settings GUI and
+# `monarch pkg install` offer after the system is up.
+#
+# Same format as base.packages: one per line, '#' starts a comment.
+
+# ------------------------------------------------------------------- office
+libreoffice-fresh
+thunderbird
+evince                        # PDF viewer
+
+# -------------------------------------------------------------------- media
+gimp
+inkscape
+obs-studio
+audacity
+
+# ---------------------------------------------------------------- dev extras
+docker
+docker-compose
+virt-manager                  # needs libvirt + /dev/kvm
+qemu-desktop
+podman
+nodejs
+npm
+python
+rustup
+go
+
+# ------------------------------------------------------------------ desktop
+steam                         # requires multilib enabled
+gnome-calculator
+gnome-disk-utility
+transmission-gtk

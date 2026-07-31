@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#DESC: Print the installed MonARCH version
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Print the installed MonARCH version.
+
+Usage:
+  monarch version [--short]
+
+  --short   just the version string, nothing else
+EOF
+}
+
+resolve_home() {
+  local src=${BASH_SOURCE[0]}
+  while [[ -L "$src" ]]; do
+    local dir; dir=$(cd -P "$(dirname "$src")" && pwd)
+    src=$(readlink "$src")
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  cd -P "$(dirname "$src")/.." && pwd
+}
+
+MONARCH_HOME=${MONARCH_HOME:-$(resolve_home)}
+
+main() {
+  local short=false
+  case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    --short)   short=true ;;
+    "")        ;;
+    *)         printf 'error: unknown argument: %s\n\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+
+  local version
+  if [[ -r "$MONARCH_HOME/version" ]]; then
+    version=$(<"$MONARCH_HOME/version")
+  else
+    printf 'error: no version file at %s/version\n' "$MONARCH_HOME" >&2
+    exit 1
+  fi
+  version=${version//[$'\n\r']/}
+
+  if [[ "$short" == true ]]; then
+    printf '%s\n' "$version"
+    exit 0
+  fi
+
+  printf 'MonARCH %s\n' "$version"
+
+  # The commit is what actually matters when someone reports a bug against a
+  # -dev version, since every -dev build shares the same version string.
+  if command -v git >/dev/null 2>&1 && [[ -d "$MONARCH_HOME/.git" ]]; then
+    local commit branch
+    # An unborn branch (fresh repo, no commits) makes rev-parse both print and
+    # fail, so take the output only when the command actually succeeded.
+    commit=$(git -C "$MONARCH_HOME" rev-parse --short HEAD 2>/dev/null) || commit=""
+    branch=$(git -C "$MONARCH_HOME" rev-parse --abbrev-ref HEAD 2>/dev/null) || branch=""
+    printf 'commit  %s (%s)\n' "${commit:-unknown}" "${branch:-unknown}"
+  fi
+  printf 'path    %s\n' "$MONARCH_HOME"
+}
+
+main "$@"

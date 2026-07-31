@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+#DESC: Paste-ready system report for debugging
+#
+# Written to be copied straight into a bug report or a chat window. Every probe
+# degrades to 'n/a' when its tool is missing, so this runs on a bare system
+# mid-install as well as on a finished desktop.
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Print a paste-ready MonARCH system report.
+
+Usage:
+  monarch doctor [--plain]
+
+  --plain   no markdown fence, for reading in a terminal
+EOF
+}
+
+resolve_home() {
+  local src=${BASH_SOURCE[0]}
+  while [[ -L "$src" ]]; do
+    local dir; dir=$(cd -P "$(dirname "$src")" && pwd)
+    src=$(readlink "$src")
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  cd -P "$(dirname "$src")/.." && pwd
+}
+
+MONARCH_HOME=${MONARCH_HOME:-$(resolve_home)}
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/monarch"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Run a command, collapse any failure or missing tool to a single word.
+probe() {
+  local out
+  if out=$("$@" 2>/dev/null); then
+    out=${out//$'\n'/ }
+    printf '%s' "${out:-n/a}"
+  else
+    printf 'n/a'
+  fi
+}
+
+field() { printf '%-16s %s\n' "$1" "$2"; }
+
+# A piece of state written by a later phase (theme in T3, mode in T6, channel in
+# T7). Absent is normal at T1, not an error.
+state() {
+  local name=$1 file="$STATE_DIR/$1"
+  if [[ -r "$file" ]]; then
+    tr -d '\n' <"$file"
+  else
+    printf 'unset'
+  fi
+}
+
+section() { printf '\n%s\n' "$1"; }
+
+report() {
+  local version="unknown"
+  [[ -r "$MONARCH_HOME/version" ]] && version=$(tr -d '\n' <"$MONARCH_HOME/version")
+
+  section "── MonARCH ──"
+  field "version" "$version"
+  if have git && [[ -d "$MONARCH_HOME/.git" ]]; then
+    field "commit" "$(probe git -C "$MONARCH_HOME" rev-parse --short HEAD)"
+    field "branch" "$(probe git -C "$MONARCH_HOME" rev-parse --abbrev-ref HEAD)"
+  fi
+  field "path" "$MONARCH_HOME"
+  field "mode" "$(state mode)"
+  field "theme" "$(state theme)"
+  field "channel" "$(state channel)"
+
+  section "── System ──"
+  field "os" "$(probe sh -c '. /etc/os-release && printf "%s" "$PRETTY_NAME"')"
+  field "kernel" "$(probe uname -r)"
+  field "arch" "$(probe uname -m)"
+  field "uptime" "$(probe uptime -p)"
+  field "root fs" "$(probe findmnt -no FSTYPE /)"
+  field "boot mode" "$([[ -d /sys/firmware/efi ]] && printf 'UEFI' || printf 'BIOS/legacy')"
+
+  section "── Hardware ──"
+  field "cpu" "$(probe sh -c "grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//'")"
+  field "gpu" "$(probe sh -c "lspci 2>/dev/null | grep -Ei 'vga|3d|display' | cut -d: -f3- | sed 's/^ *//'")"
+  field "ram" "$(probe sh -c "free -h --si | awk '/^Mem:/ {print \$3 \" used of \" \$2}'")"
+  field "swap" "$(probe sh -c "free -h --si | awk '/^Swap:/ {print \$3 \" used of \" \$2}'")"
+  field "disk /" "$(probe sh -c "df -h / | awk 'NR==2 {print \$3 \" used of \" \$2 \" (\" \$5 \")\"}'")"
+  field "battery" "$(probe sh -c "cat /sys/class/power_supply/BAT*/capacity 2>/dev/null | head -1 | sed 's/$/%/'")"
+
+  section "── Desktop ──"
+  field "session" "${XDG_SESSION_TYPE:-n/a}"
+  field "compositor" "$(probe sh -c "hyprctl version 2>/dev/null | head -1 | sed 's/^ *//'")"
+  field "hyprland pid" "$(probe pgrep -x Hyprland)"
+  field "waybar" "$(probe sh -c 'waybar --version 2>/dev/null | head -1')"
+  field "GDK_SCALE" "${GDK_SCALE:-unset}"
+  field "monitors" "$(probe sh -c "hyprctl monitors -j 2>/dev/null | grep -c '\"name\"'")"
+
+  section "── Packages ──"
+  # Guard on pacman itself: piping into wc succeeds even when pacman is missing,
+  # which would report a confident '0' instead of an honest 'n/a'.
+  if have pacman; then
+    field "pacman pkgs" "$(probe sh -c 'pacman -Qq | wc -l')"
+    field "aur pkgs" "$(probe sh -c 'pacman -Qqm | wc -l')"
+  else
+    field "pacman pkgs" "n/a"
+    field "aur pkgs" "n/a"
+  fi
+  field "paru" "$(probe sh -c 'paru --version 2>/dev/null | head -1')"
+
+  section "── hyprpm plugins ──"
+  if have hyprpm; then
+    hyprpm list 2>/dev/null | sed 's/^/  /' || printf '  n/a (hyprpm returned an error)\n'
+  else
+    printf '  n/a (hyprpm not installed)\n'
+  fi
+
+  section "── Failed units ──"
+  local failed
+  failed=$(systemctl --failed --no-legend --plain 2>/dev/null || true)
+  if [[ -z "$failed" ]]; then
+    printf '  none\n'
+  else
+    printf '%s\n' "$failed" | sed 's/^/  /'
+  fi
+
+  section "── User units ──"
+  local ufailed
+  ufailed=$(systemctl --user --failed --no-legend --plain 2>/dev/null || true)
+  if [[ -z "$ufailed" ]]; then
+    printf '  none\n'
+  else
+    printf '%s\n' "$ufailed" | sed 's/^/  /'
+  fi
+
+  section "── Install log ──"
+  if [[ -r /var/log/monarch-install.log ]]; then
+    field "path" "/var/log/monarch-install.log"
+    field "size" "$(probe sh -c "du -h /var/log/monarch-install.log | cut -f1")"
+    field "last write" "$(probe sh -c "date -r /var/log/monarch-install.log -Is")"
+  else
+    printf '  not present\n'
+  fi
+}
+
+main() {
+  local plain=false
+  case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    --plain)   plain=true ;;
+    "")        ;;
+    *)         printf 'error: unknown argument: %s\n\n' "$1" >&2; usage >&2; exit 1 ;;
+  esac
+
+  if [[ "$plain" == true ]]; then
+    report
+    printf '\n'
+  else
+    # Fenced so it survives a paste into GitHub or a chat window intact.
+    printf '```\n'
+    report
+    printf '```\n'
+  fi
+}
+
+main "$@"
