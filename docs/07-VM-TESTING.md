@@ -99,7 +99,25 @@ of those fails it says which. Everything is logged to
    a notification (`notify-send hello`) is themed, **and whether Walker
    (`Super`) is styled at all**. Walker is the one MonARCH is least sure of.
 
-8. **`monarch keys reset --yes`** and confirm the desktop still has keys. It is
+8. **The bar** (T5). The right-hand group should read, left to right: CPU, RAM,
+   GPU, network throughput, disk free, then tray/bluetooth/network/audio/
+   battery/clock. Then:
+   ```bash
+   monarch bar modules              # what is on
+   monarch bar modules disable gpu  # the bar restarts, GPU vanishes
+   monarch bar modules --performance
+   monarch bar modules reset
+   ```
+   Click CPU — btop should open floating showing the CPU box only. **And the
+   number T5 could not measure:** leave the desktop idle a minute, then
+   `top -bn2 | grep -i waybar | tail -1`. The budget is under 1% of one core;
+   the estimate was ~0.2%.
+
+   The GPU module says a percentage that is *clock speed*, not utilisation,
+   unless `intel-gpu-tools` is installed — the tooltip says which you are
+   looking at.
+
+9. **`monarch keys reset --yes`** and confirm the desktop still has keys. It is
    the recovery path if a rebind goes wrong, so it is worth knowing it works
    before you need it.
 

@@ -10,8 +10,8 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 ## Current state
 
 **Phase:** 2 — The system layer
-**Next task:** T5 — Waybar system stats
-**Blocked on:** nothing — but **nothing in T1–T4 has ever been run on Arch.** Four tasks of work are now stacked on a desktop that has never booted. The VM test (Phase 0.4/0.5, full procedure in `docs/07-VM-TESTING.md`) is overdue and gets more expensive to defer with every task.
+**Next task:** T6 — Mode system
+**Blocked on:** nothing — but **nothing in T1–T5 has ever been run on Arch.** Five tasks of work are now stacked on a desktop that has never booted. The VM test (Phase 0.4/0.5, full procedure in `docs/07-VM-TESTING.md`) is overdue and gets more expensive to defer with every task.
 
 ---
 
@@ -147,19 +147,30 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 ---
 
 ### T5 — Waybar system stats · Sonnet
-**Status:** TODO
+**Status:** DONE (code complete, locally verified — **awaiting first run on Arch**)
 
 **Done when:**
-- [ ] CPU, RAM, GPU, network, disk modules exist
-- [ ] Poll intervals: 5s CPU/RAM, 10s net, 60s disk — no faster
-- [ ] GPU module degrades gracefully when `intel_gpu_top` is absent
-- [ ] Colors read from the active theme, nothing hardcoded
-- [ ] `monarch-bar-modules` enables/disables individual modules
-- [ ] Total added idle CPU under 1% on an i7-8665U, with per-module cost noted in comments
+- [x] CPU, RAM, GPU, network, disk modules exist — `config/waybar/modules-system.jsonc`
+- [x] Poll intervals: 5s CPU/RAM, 10s net, 60s disk — no faster; GPU is 10s because it is the only one that forks
+- [x] GPU module degrades gracefully when `intel_gpu_top` is absent — three tiers, and **the fallback tier was exercised on this Intel laptop**, which is the one thing in T3–T5 that has run on real Intel hardware
+- [x] Colors read from the active theme, nothing hardcoded — and they are the **semantic** names (`@warning`, `@urgent`), not `@yellow`/`@red`
+- [x] `monarch-bar-modules` enables/disables individual modules — plus `order`, `reset`, `--performance` / `--standard`
+- [~] Total added idle CPU under 1% on an i7-8665U — **estimated at ~0.2%**, with a per-module table in `modules-system.jsonc`. Estimated, not measured: that needs the VM or the metal
 
 **Notes:**
 
-- **Use the semantic colours, not the raw ones.** T3's palette gives Waybar `@urgent`, `@warning`, `@ok`, `@info` and `@muted` alongside `@red`/`@yellow`/`@green`. A module reporting a failing disk should ask for `@urgent` so a theme can decide urgent is orange. Also available: `@bg_translucent` and `@surface_translucent`, pre-composited so the stylesheet needs no colour maths.
+- **Waybar's `include` is the seam.** `config.jsonc` no longer defines `modules-right` at all. It includes two files: `modules-active.jsonc` (a symlink to whichever definitions variant is in use) and `modules-enabled.jsonc` (generated — the list and its order). **Waybar's own config takes precedence over an include**, so leaving `modules-right` in `config.jsonc` would have made the generated file silently do nothing. There is a comment in `config.jsonc` saying so, because that bug would be invisible.
+- **The variant switch is a symlink, not a copy**, and it points into `~/.config/waybar/`, **not into the repo**. A link to the repo would bypass the deployed copy, so a file the user had edited would have no effect — exactly the surprise `monarch-config-apply` exists to prevent. It falls back to the repo copy only during a first install, before `config apply` has run.
+- **`bar_modules` in `settings.toml` must stay on one line.** It is the only array MonARCH rewrites in place, and a single-line array is something `awk` can replace without a TOML writer. The comment above it says this; reformatting it across several lines breaks `monarch bar modules`.
+- **`monarch-bar-gpu` deliberately does not source `_lib.sh`** and does not walk symlinks. It forks every 10 seconds, and sourcing a library to print one line of JSON would roughly double the cost of the only module that costs anything. It is the one command with that exemption, and it says so in the file.
+- **The GPU number is a proxy unless `intel-gpu-tools` is installed.** There is no i915 equivalent of amdgpu's `gpu_busy_percent`, so the fallback reports `gt_cur_freq_mhz` over `gt_max_freq_mhz` — clock speed, not utilisation. The tooltip says so in as many words. `intel-gpu-tools` is in `optional.packages`; even installed, `intel_gpu_top` needs `CAP_PERFMON` or `perf_event_paranoid <= 1`, so the fallback may still be what you see.
+- **Deliberately never coloured by state:** network throughput (high throughput is what a network is for) and the GPU's frequency-fallback reading (a GPU parked at maximum clock is not a problem, and colouring it red would train you to ignore the colour).
+- **Disk's thresholds are inverted on purpose.** It reports FREE space, so `warning: 85` fires as the number falls. Both `modules-system.jsonc` and `style.css` carry a comment saying not to "fix" them to match CPU and memory.
+- **btop preset indices are a contract between two files.** `config/btop/btop.conf` defines `presets = "cpu,mem,net,proc"` and the `on-click` handlers in `modules-system.jsonc` call `btop -p 0|1|2`. Change one, change the other. Disk clicks through to the mem preset because btop draws disks inside the memory box.
+- **The performance variant is `config/waybar/modules-system-performance.jsonc`** — CPU and RAM only, both at 10s, nothing forking. **T6 should point performance mode's `waybar-overrides.jsonc` at it** rather than writing a third copy; until then it is `monarch bar modules --performance` by hand.
+- **`monarch bar modules` restarts Waybar rather than reloading it.** `SIGUSR2` re-reads the config but the widgets are built at start-up, so a changed module *list* needs a restart. That is why this is not a thing to call in a loop.
+- **No allowlist of module names.** `enable custom/weather` works and writes it straight through. Waybar ignores a placed module it has no definition for, so the cost of being wrong is a missing widget, not a broken bar — and the alternative is a list to maintain every time Waybar gains a module.
+- **`migrations/1785531465.sh` ships with this task** (golden rule 5). `settings.toml` is seed-only, so `bar_modules` would never arrive on an existing install; the migration appends it and generates the list. It checks first and leaves a customised bar alone.
 
 ---
 
@@ -176,7 +187,9 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 - [ ] No `if mode == ...` anywhere. Modes are data
 
 **Notes:**
-_(empty)_
+
+- **The performance mode's bar already exists.** T5 shipped `config/waybar/modules-system-performance.jsonc` — CPU and RAM only, both at 10s, nothing forking. Point performance mode's `waybar-overrides.jsonc` at it, or have the mode move the `modules-active.jsonc` symlink (`monarch bar modules --performance` does exactly that). Do not write a third copy.
+- **Three generated files now exist that a mode switch must not fight with:** `hypr/bindings.conf` (T4), `monarch/theme/*` (T3) and `waybar/modules-enabled.jsonc` + the `modules-active.jsonc` symlink (T5). A mode that wants different bindings or a different bar should go through the owning command, not write those files itself.
 
 ---
 
@@ -323,4 +336,5 @@ DATE | TASK | OUTCOME | NOTES FOR NEXT SESSION
 2026-07-31 | T2 | DONE (unverified on Arch) | Full Hyprland/Waybar/Alacritty config set, settings.toml, monarch-config-apply + startup add/list/remove. Established the theme contract T3 must honour and the config/.seed-only mechanism. Phase 1 is now code-complete — the ONLY thing left is running it on a clean Arch VM (Phase 0.4/0.5 first). Do that before T3; a theme engine on top of an unbooted desktop is building on sand.
 2026-07-31 | T3 | DONE (unverified on Arch) | Theme engine: schema/theme.toml, 8 self-describing templates, theme apply/list/current/install/remove, background set/next, 3 original palettes, hyprpaper added. Palette files no longer shipped in config/ — install stage 30 renders them. Migration 1785505659 ships with it. NOTE: the previous session said do the VM test before T3 and it still has not happened — three tasks now sit on a desktop that has never booted. Walker and VS Code theming are the two pieces that CANNOT be verified without it. Next: T4 (keybinds), or better, the VM.
 2026-07-31 | T4 | DONE (unverified on Arch) | schema/keybinds.toml (65 binds), _keys-lib.sh with an arrays-of-tables TOML parser, keys apply/check/list/reset. Placeholder bindings.conf deleted from the repo — install stage 30 generates it, same as the palette. Migration 1785529604 keeps any pre-T4 copy. Bound the help screen to Super+/ not Super+K, reasons in the T4 notes. cliphist added. Still nothing has booted; docs/07-VM-TESTING.md is the procedure. Next: T5 (Waybar stats) — its notes already say to use the semantic colours.
+2026-07-31 | T5 | DONE (unverified on Arch) | Waybar stats: modules-system.jsonc (cpu/memory/custom-gpu/network throughput/disk) wired through Waybar's include, monarch-bar-modules for enable/disable/order/reset/--performance, monarch-bar-gpu with a three-tier degrade. config.jsonc no longer defines modules-right — the generated modules-enabled.jsonc does, because an include cannot override the parent. btop presets pinned so a click drills into the right box. Migration 1785531465. Idle cost ESTIMATED at ~0.2%, not measured. The GPU fallback is the only thing in T3-T5 that has run on real Intel hardware. Next: T6 (modes) — or the VM, which is now five tasks overdue.
 ```

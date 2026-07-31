@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+#DESC: Print GPU load as Waybar JSON (Intel UHD 620)
+
+# Deliberately NOT `set -e`. This runs every 10 seconds inside the bar; a
+# failing read should produce an empty module, not a gap where the bar used to
+# be. Every probe below is allowed to fail.
+set -uo pipefail
+
+# No _lib.sh, no MONARCH_HOME resolution, no symlink walk. This is the hot path
+# — it forks every 10 seconds — and sourcing a library to print one line of
+# JSON would double its cost for nothing. It is the only monarch command that
+# gets this exemption.
+
+usage() {
+  cat <<'EOF'
+Print GPU load as a Waybar JSON object.
+
+Usage:
+  monarch bar gpu [--plain]
+
+  --plain   one human-readable line instead of JSON
+
+Called by the custom/gpu module in config/waybar/modules-system.jsonc. There is
+no reason to run it by hand except to see what the bar is seeing.
+
+How it measures, best source first
+
+  intel_gpu_top    real render-engine utilisation. Needs intel-gpu-tools AND
+                   permission — CAP_PERFMON, or perf_event_paranoid <= 1.
+  sysfs frequency  gt_cur_freq_mhz as a fraction of gt_max_freq_mhz. Always
+                   readable, no root. A proxy, not utilisation: the GPU can sit
+                   at full clock doing very little. The tooltip says so.
+
+With neither, it prints nothing and Waybar hides the module. A laptop with no
+render node is not an error worth showing on the bar.
+EOF
+}
+
+PLAIN=false
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+[[ "${1:-}" == "--plain" ]] && PLAIN=true
+
+# JSON strings here are icon text and fixed sentences — no user input reaches
+# them, so no escaping is needed beyond keeping quotes out of the values.
+emit() {
+  local text=$1 tooltip=$2 class=$3
+  if [[ "$PLAIN" == true ]]; then
+    printf '%s  (%s)\n' "$text" "$class"
+  else
+    printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' "$text" "$tooltip" "$class"
+  fi
+}
+
+# Waybar hides a custom module whose output is empty.
+emit_nothing() {
+  [[ "$PLAIN" == true ]] && printf 'no GPU found\n'
+  exit 0
+}
+
+class_for() {
+  local pct=$1
+  if   [[ $pct -ge 90 ]]; then printf 'critical'
+  elif [[ $pct -ge 70 ]]; then printf 'warning'
+  else                         printf 'normal'
+  fi
+}
+
+# ---------------------------------------------------- best: real utilisation ---
+
+# intel_gpu_top -J -s <ms> -o - emits a JSON array; one sample is enough.
+# Timeout because it streams forever if the sample count is not honoured, and a
+# module that hangs takes the bar's update thread with it.
+try_intel_gpu_top() {
+  command -v intel_gpu_top >/dev/null 2>&1 || return 1
+
+  local out busy
+  out=$(timeout 2 intel_gpu_top -J -s 200 -o - 2>/dev/null | head -c 4000) || return 1
+  [[ -n "$out" ]] || return 1
+
+  # "Render/3D": { "busy": 12.34, ... } — the first busy figure after it.
+  busy=$(printf '%s' "$out" \
+    | grep -A6 '"Render/3D' \
+    | grep -m1 -o '"busy":[[:space:]]*[0-9.]*' \
+    | grep -o '[0-9.]*$')
+  [[ -n "$busy" ]] || return 1
+
+  local pct=${busy%%.*}
+  [[ "$pct" =~ ^[0-9]+$ ]] || return 1
+
+  emit "󰢮  ${pct}%" "GPU ${pct}% busy (render engine)" "$(class_for "$pct")"
+  return 0
+}
+
+# ------------------------------------------------- fallback: clock fraction ---
+
+try_sysfs_frequency() {
+  local card cur max
+  for card in /sys/class/drm/card[0-9]; do
+    [[ -r "$card/gt_cur_freq_mhz" && -r "$card/gt_max_freq_mhz" ]] || continue
+
+    cur=$(<"$card/gt_cur_freq_mhz") || continue
+    max=$(<"$card/gt_max_freq_mhz") || continue
+    [[ "$cur" =~ ^[0-9]+$ && "$max" =~ ^[0-9]+$ ]] || continue
+    [[ $max -gt 0 ]] || continue
+
+    local pct=$(( cur * 100 / max ))
+
+    # The class deliberately stays 'normal' here regardless of the number. A
+    # GPU parked at its maximum clock is not a problem, and colouring this red
+    # would train you to ignore the colour.
+    emit "󰢮  ${pct}%" \
+      "GPU clock ${cur} of ${max} MHz (${pct}%)\\nClock speed, not utilisation — install intel-gpu-tools for the real figure" \
+      "normal"
+    return 0
+  done
+  return 1
+}
+
+try_intel_gpu_top && exit 0
+try_sysfs_frequency && exit 0
+emit_nothing

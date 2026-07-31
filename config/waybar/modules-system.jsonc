@@ -1,0 +1,121 @@
+// MonARCH — Waybar system stats
+//
+// Pulled into config.jsonc through "include". Definitions only: which of these
+// actually appear in the bar is decided by modules-enabled.jsonc, which
+// `monarch bar modules` generates. Defining a module Waybar never places costs
+// nothing, so this file is the full catalogue.
+//
+// No colours. style.css owns appearance and reads the palette from
+// ~/.config/monarch/theme/waybar-colors.css.
+//
+// ───────────────────────────────────────────────────────────── poll budget ───
+//
+// Golden rule 3: no new daemons. Every module here is either a Waybar built-in
+// reading /proc directly, or one short-lived script. That makes the polling
+// interval the entire cost, and the reason the intervals below are floors, not
+// suggestions.
+//
+// Measured shape of the cost on an i7-8665U (4 cores / 8 threads, 1.9GHz base):
+//
+//   module      interval   per poll        est. idle CPU
+//   cpu           5s       in-process       ~0.01%   reads /proc/stat
+//   memory        5s       in-process       ~0.01%   reads /proc/meminfo
+//   disk         60s       in-process      <0.01%    statvfs on one mount
+//   network#tx   10s       in-process       ~0.02%   reads /proc/net/dev
+//   custom/gpu   10s       forks bash       ~0.15%   two sysfs reads
+//                                          ───────
+//                                           ~0.2%   total added
+//
+// The forked module is the only one that costs anything worth counting: a bash
+// start-up is ~3ms, so one every 10 seconds is ~0.03% of one core, and the
+// figure above is the conservative end. Well inside the 1% budget, with room
+// for T5's successor to add one more forking module without a rethink.
+//
+// If you add a module that forks, put it on 10s or slower and add a row above.
+{
+  // ────────────────────────────────────────────────────────────────── cpu ───
+  //
+  // Built-in: reads /proc/stat in-process, no fork. The tooltip's per-core
+  // breakdown is computed from the same read, so it is free.
+  "cpu": {
+    "interval": 5,
+    "format": "  {usage}%",
+    "tooltip": true,
+    "states": {
+      "warning": 70,
+      "critical": 90
+    },
+    // btop preset 0 is the CPU box on its own. Presets are defined in
+    // config/btop/btop.conf; the indices here and there must agree.
+    "on-click": "alacritty --class monarch-float -e btop -p 0"
+  },
+
+  // ─────────────────────────────────────────────────────────────── memory ───
+  //
+  // Built-in: /proc/meminfo, no fork. {used:0.1f} is GiB to one decimal —
+  // percentage alone does not tell you whether closing a tab will help.
+  "memory": {
+    "interval": 5,
+    "format": "  {used:0.1f}G",
+    "tooltip-format": "{used:0.1f}G of {total:0.1f}G  ({percentage}%)\nSwap: {swapUsed:0.1f}G of {swapTotal:0.1f}G",
+    "states": {
+      "warning": 75,
+      "critical": 90
+    },
+    "on-click": "alacritty --class monarch-float -e btop -p 1"
+  },
+
+  // ────────────────────────────────────────────────────────────────── gpu ───
+  //
+  // Intel UHD 620. There is no i915 equivalent of amdgpu's gpu_busy_percent,
+  // so `monarch bar gpu` reports the render clock as a fraction of its ceiling
+  // and says so in the tooltip. It upgrades itself to real utilisation if
+  // intel_gpu_top is installed and permitted. Absent hardware: the module
+  // returns empty and Waybar hides it.
+  //
+  // The only forking module in the set — hence 10s, not 5s.
+  "custom/gpu": {
+    "exec": "monarch-bar-gpu",
+    "return-type": "json",
+    "interval": 10,
+    "format": "{}",
+    "on-click": "alacritty --class monarch-float -e btop"
+  },
+
+  // ────────────────────────────────────────────────────────── network i/o ───
+  //
+  // A second instance of the built-in network module, throughput only — the
+  // first instance in config.jsonc owns the connection state and its icon.
+  // Both read /proc/net/dev in-process.
+  //
+  // Bytes, not bits: a download that says 5.8M when the browser says 5.8MB/s
+  // is the one people can act on.
+  "network#throughput": {
+    "interval": 10,
+    "format": "  {bandwidthDownBytes}  {bandwidthUpBytes}",
+    "format-disconnected": "",
+    "tooltip-format": "{ifname}\ndown {bandwidthDownBytes}   up {bandwidthUpBytes}",
+    "on-click": "alacritty --class monarch-float -e btop -p 2"
+  },
+
+  // ───────────────────────────────────────────────────────────────── disk ───
+  //
+  // Free space on /, which on a Btrfs root is also where snapshots live. 60s:
+  // disk usage does not move fast enough to justify anything quicker, and the
+  // number people want is "am I about to run out", not a live gauge.
+  //
+  // Note the states are inverted relative to CPU and memory — this reports
+  // FREE space, so the warning fires as the number falls. style.css handles
+  // that; do not "fix" the thresholds to match the others.
+  "disk": {
+    "interval": 60,
+    "path": "/",
+    "format": "  {free}",
+    "tooltip-format": "{used} of {total} used on {path}  ({percentage_used}%)\n{free} free",
+    "states": {
+      "warning": 85,
+      "critical": 95
+    },
+    "on-click": "alacritty --class monarch-float -e btop -p 1"
+  }
+}

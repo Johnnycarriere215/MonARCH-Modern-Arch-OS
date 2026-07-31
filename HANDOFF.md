@@ -1,7 +1,7 @@
 # HANDOFF
 
 Written 2026-07-31, at the end of the session that finished T2.
-Updated 2026-07-31, at the end of the session that finished T4.
+Updated 2026-07-31, at the end of the session that finished T5.
 
 This file is a **pointer, not a summary.** It deliberately does not restate the
 project — `MONARCH.md` and `PROGRESS.md` do that, and a second copy of the same
@@ -27,24 +27,28 @@ The repo is at `github.com/Johnnycarriere215/MonARCH-Modern-Arch-OS`, branch
 
 ## Where the build actually is
 
-**Phase 1 is code-complete, T3 and T4 are done on top of it, and none of it has
+**Phase 1 is code-complete, T3/T4/T5 are done on top of it, and none of it has
 ever been run on Arch.**
 
-T1 (bootstrap + package manifests), T2 (base config set), T3 (theme engine) and
-T4 (keybinds) are all written, all locally verified, all marked `DONE` with the
-criteria that need real hardware honestly left unticked — chief among them:
-*the VM boots to a Hyprland desktop, logs in, and opens a terminal.*
+T1 (bootstrap + package manifests), T2 (base config set), T3 (theme engine),
+T4 (keybinds) and T5 (Waybar stats) are all written, all locally verified, all
+marked `DONE` with the criteria that need real hardware honestly left unticked
+— chief among them: *the VM boots to a Hyprland desktop, logs in, and opens a
+terminal.*
 
 Everything written so far has been tested by simulation — fake `HOME`
 directories, syntax checks, install stages replayed twice against a throwaway
 home, mechanical validation that every theme variable resolves. None of it has
 met a real Arch install.
 
-The previous two handoffs both said the next thing to happen should be the VM
-test. It has not happened either time. **Four tasks now sit on a desktop that
-has never booted**, and the pieces that cannot be verified any other way keep
-accumulating: Walker's theming, VS Code's theming, and now every keybinding —
-no version of Hyprland has parsed a single line MonARCH generates.
+The previous three handoffs all said the next thing to happen should be the VM
+test. It has not happened any of the three times. **Five tasks now sit on a
+desktop that has never booted**, and the pieces that cannot be verified any
+other way keep accumulating: Walker's theming, VS Code's theming, every
+keybinding, and now the bar's idle CPU cost — which is the one number T5 was
+given a hard budget for and could only estimate.
+
+No version of Hyprland has parsed a single line MonARCH generates.
 
 `docs/07-VM-TESTING.md` is the whole procedure, start to finish.
 
@@ -140,6 +144,11 @@ stages are fatal on failure, because `hyprland.conf` sources both files.
 never touched again — settings, monitor layout, `btop.conf` (btop rewrites it
 itself). **Anything a future task generates into `config/` must be listed
 there**, but better still, do not generate into `config/` at all.
+
+**The bar.** `config.jsonc` deliberately has no `modules-right` — Waybar's own
+config takes precedence over an include, so defining it there would make the
+generated `modules-enabled.jsonc` silently do nothing. `monarch bar modules`
+owns the list; `bar_modules` in `settings.toml` must stay on one line.
 
 **The keymap.** `schema/keybinds.toml` is the source of truth;
 `~/.config/monarch/keybinds.toml` overrides it if it exists. `monarch keys

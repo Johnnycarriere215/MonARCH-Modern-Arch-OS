@@ -102,7 +102,11 @@ window#waybar.empty .modules-center {
 #network,
 #wireplumber,
 #battery,
-#clock {
+#clock,
+#cpu,
+#memory,
+#disk,
+#custom-gpu {
   padding: 0 10px;
   margin: 4px 1px;
   border-radius: 7px;
@@ -146,6 +150,46 @@ window#waybar.empty .modules-center {
   font-weight: 600;
   padding: 0 12px;
 }
+
+/* ─────────────────────────────────────────────────────── system stats ─── */
+
+/* Defined in modules-active.jsonc, placed by modules-enabled.jsonc. All five
+ * share a resting colour: at a glance the stats should read as one block of
+ * numbers, with only the one in trouble standing out.
+ *
+ * State colours are SEMANTIC — @warning and @urgent, not @yellow and @red. A
+ * theme is free to decide that urgent is orange, and nothing here changes for
+ * that to work. */
+#cpu,
+#memory,
+#disk,
+#custom-gpu,
+#network.throughput {
+  color: @fg_dim;
+}
+
+#cpu.warning,
+#memory.warning,
+#custom-gpu.warning  { color: @warning; }
+
+#cpu.critical,
+#memory.critical,
+#custom-gpu.critical {
+  color: @urgent;
+  font-weight: 600;
+}
+
+/* Disk reports FREE space, so its states fire as the number falls — the
+ * thresholds in modules-system.jsonc are inverted relative to CPU and memory
+ * on purpose. Same colours, opposite direction. */
+#disk.warning  { color: @warning; }
+#disk.critical {
+  color: @urgent;
+  font-weight: 600;
+}
+
+/* Never coloured by state: throughput being high is what a network is for. */
+#network.throughput { color: @fg_dim; }
 
 /* Tooltips — calendar, network details, battery estimate. */
 tooltip {

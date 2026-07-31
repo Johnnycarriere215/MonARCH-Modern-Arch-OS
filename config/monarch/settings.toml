@@ -33,6 +33,15 @@ workspace_count = 5
 # Locked decision: two channels, nothing else. Implemented in T7.
 update_channel = "stable"
 
+# The right-hand group of the Waybar, in order. Managed by:
+#   monarch bar modules enable|disable|order|reset
+#   monarch bar modules --performance   CPU and RAM only, polled at 10s
+#
+# Kept on ONE line deliberately: a single-line array is something the CLI can
+# rewrite without a TOML writer, and this is the only array MonARCH edits in
+# place. Reformatting it across several lines will stop that working.
+bar_modules = ["cpu", "memory", "custom/gpu", "network#throughput", "disk", "tray", "bluetooth", "network", "wireplumber", "battery", "clock"]
+
 # Applications launched at login, beyond the essentials in autostart.conf.
 # Managed with: monarch startup add|remove|list
 # Each entry is a command line, exactly as it would be typed.

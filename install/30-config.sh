@@ -71,6 +71,19 @@ stage_30_apply_keys() {
     || die "could not generate keybindings"
 }
 
+stage_30_apply_bar() {
+  # modules-enabled.jsonc and the modules-active.jsonc symlink are generated,
+  # for the same reason the palette and the keymap are. Not fatal, unlike those
+  # two: Waybar with a missing include logs a warning and carries on, so a
+  # failure here costs you the stats, not the session.
+  local apply="$MONARCH_HOME/bin/monarch-bar-modules"
+  [[ -x "$apply" ]] || { warn "missing $apply — skipping bar modules"; return 0; }
+
+  info "Configuring bar modules"
+  MONARCH_HOME="$MONARCH_HOME" "$apply" reset \
+    || warn "could not configure bar modules — the bar will start without stats"
+}
+
 stage_30_link_cli() {
   local bindir="$HOME/.local/bin"
   info "Linking the monarch CLI into $bindir"
@@ -115,6 +128,7 @@ stage_30_config() {
   # name out of it.
   stage_30_apply_theme
   stage_30_apply_keys
+  stage_30_apply_bar
   stage_30_link_cli
   stage_30_path
 }

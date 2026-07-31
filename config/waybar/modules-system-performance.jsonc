@@ -1,0 +1,39 @@
+// MonARCH — Waybar system stats, performance variant
+//
+// A drop-in replacement for modules-system.jsonc when the machine has better
+// things to do with its cycles: on battery, or mid-build.
+//
+// Two modules, both Waybar built-ins reading /proc in-process, both on 10s.
+// Nothing forks. Estimated idle cost ~0.01%, against ~0.2% for the full set —
+// the saving is almost entirely the GPU module's bash fork, which is the only
+// thing in the standard set that costs anything measurable.
+//
+// GPU, network throughput and disk are dropped rather than slowed. A stat you
+// glance at every few minutes is not worth a poll loop; open btop.
+//
+// T6 owns wiring this up: performance mode should point Waybar's include at
+// this file instead of modules-system.jsonc. Until then it is switched by
+// hand, which is `monarch bar modules --performance`.
+{
+  "cpu": {
+    "interval": 10,
+    "format": "  {usage}%",
+    "tooltip": true,
+    "states": {
+      "warning": 70,
+      "critical": 90
+    },
+    "on-click": "alacritty --class monarch-float -e btop -p 0"
+  },
+
+  "memory": {
+    "interval": 10,
+    "format": "  {used:0.1f}G",
+    "tooltip-format": "{used:0.1f}G of {total:0.1f}G  ({percentage}%)",
+    "states": {
+      "warning": 75,
+      "critical": 90
+    },
+    "on-click": "alacritty --class monarch-float -e btop -p 1"
+  }
+}

@@ -1,12 +1,33 @@
 // MonARCH — Waybar
 //
 // Workspaces, window title, clock, tray, network, bluetooth, audio, battery.
-// System stats (CPU, RAM, GPU, disk, network throughput) arrive in T5 and go
-// in the right-hand group alongside these.
+// The system stats (CPU, RAM, GPU, disk, network throughput) are defined in
+// modules-active.jsonc, included below.
 //
 // No colours here. style.css owns appearance and reads its palette from
 // ~/.config/monarch/theme/waybar-colors.css.
+//
+// ───────────────────────────────────────────────────────────────── includes ──
+//
+// modules-active.jsonc   symlink to config/waybar/modules-system.jsonc, or to
+//                        the -performance variant. `monarch bar modules
+//                        --performance` moves the link. A symlink rather than a
+//                        copy, so an update to the variant flows through
+//                        without that command being run again.
+//
+// modules-enabled.jsonc  GENERATED. Holds "modules-right" — which modules are
+//                        placed, and in what order. `monarch bar modules`
+//                        writes it from bar_modules in settings.toml.
+//
+// Note there is no "modules-right" in THIS file. Waybar's own config takes
+// precedence over an include, so defining it here would make the generated file
+// silently ineffective — the kind of bug that costs an afternoon.
 {
+  "include": [
+    "~/.config/waybar/modules-active.jsonc",
+    "~/.config/waybar/modules-enabled.jsonc"
+  ],
+
   "layer": "top",
   "position": "top",
   "height": 34,
@@ -21,14 +42,6 @@
     "hyprland/window"
   ],
 
-  "modules-right": [
-    "tray",
-    "bluetooth",
-    "network",
-    "wireplumber",
-    "battery",
-    "clock"
-  ],
 
   // ─────────────────────────────────────────────────────────────── left ───
 
