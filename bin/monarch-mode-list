@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+#DESC: List the available modes
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_mode-lib.sh"
+
+usage() {
+  cat <<'EOF'
+List the modes on this machine.
+
+Usage:
+  monarch mode list [--names] [--porcelain]
+
+  --names      one name per line, nothing else
+  --porcelain  tab-separated: name, description, requires, fallback, variant
+
+A mode you write in ~/.config/monarch/modes/<name>/ shadows one MonARCH ships
+under the same name — the same arrangement as themes.
+EOF
+}
+
+NAMES_ONLY=false
+PORCELAIN=false
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)   usage; exit 0 ;;
+      --names)     NAMES_ONLY=true ;;
+      --porcelain) PORCELAIN=true ;;
+      *) err "unknown argument: $1"; exit 1 ;;
+    esac
+    shift
+  done
+
+  if [[ "$NAMES_ONLY" == true ]]; then
+    mode_names
+    exit 0
+  fi
+
+  local saved session="" active
+  saved=$(settings_mode 2>/dev/null || printf 'tiling')
+  [[ -s "$MODE_SESSION_STATE" ]] && session=$(<"$MODE_SESSION_STATE")
+  active=${session:-$saved}
+
+  local name dir marker found=false
+  while IFS= read -r name; do
+    found=true
+    dir=$(mode_path "$name")
+    mode_load_meta "$dir/meta.toml" 2>/dev/null || continue
+
+    if [[ "$PORCELAIN" == true ]]; then
+      printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$name" "${MODEMETA[description]:-}" "${MODE_REQUIRES[*]:-}" \
+        "${MODEMETA[fallback]:-}" "${MODEMETA[bar_variant]:-standard}"
+      continue
+    fi
+
+    if [[ "$name" == "$active" ]]; then
+      marker="${C_GREEN}*${C_RESET}"
+    else
+      marker=" "
+    fi
+
+    printf ' %b %-13s %s%s%s\n' "$marker" "$name" \
+      "$C_DIM" "${MODEMETA[description]:-}" "$C_RESET"
+
+    if [[ ${#MODE_REQUIRES[@]} -gt 0 ]]; then
+      printf '   %s%-13s needs %s%s\n' "$C_DIM" "" "${MODE_REQUIRES[*]}" "$C_RESET"
+    fi
+  done < <(mode_names)
+
+  [[ "$PORCELAIN" == true ]] && exit 0
+
+  if [[ "$found" == false ]]; then
+    warn "no modes found"
+    exit 1
+  fi
+
+  if [[ -n "$session" ]]; then
+    printf '\n%s* is active for this session. Saved default: %s%s\n' \
+      "$C_YELLOW" "$saved" "$C_RESET"
+  fi
+
+  printf '\n%smonarch mode set <name>      keep it%s\n' "$C_DIM" "$C_RESET"
+  printf '%smonarch mode session <name>  just for now%s\n' "$C_DIM" "$C_RESET"
+}
+
+main "$@"

@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+#DESC: Switch mode for this session only, leaving the saved default alone
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_mode-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Switch mode for this session only.
+
+Usage:
+  monarch mode session <name> [--no-reload] [--no-plugins]
+  monarch mode session --off        drop back to the saved mode now
+
+The saved default in settings.toml is not touched. At the next login
+`monarch mode session-end` — which autostart.conf runs — clears the override
+and you are back to whatever `monarch mode set` last chose.
+
+This exists because "which mode do you want right now?" and "which mode should
+this machine boot into?" are different questions. The first-run wizard asks
+them separately, and so should anything else that offers a mode.
+EOF
+}
+
+NAME=""
+RELOAD=true
+PLUGINS=true
+OFF=false
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)    usage; exit 0 ;;
+      --off)        OFF=true ;;
+      --no-reload)  RELOAD=false ;;
+      --no-plugins) PLUGINS=false ;;
+      -*) err "unknown option: $1"; exit 1 ;;
+      *)  [[ -z "$NAME" ]] || die "one mode at a time"; NAME=$1 ;;
+    esac
+    shift
+  done
+
+  mkdir -p "$MONARCH_STATE_DIR"
+
+  # ---- drop the override ---------------------------------------------------
+  if [[ "$OFF" == true ]]; then
+    if [[ ! -s "$MODE_SESSION_STATE" ]]; then
+      ok "no session override is active"
+      exit 0
+    fi
+    mode_write_empty "$MODE_SESSION_CONF"
+    : >"$MODE_SESSION_STATE"
+
+    local saved; saved=$(settings_mode 2>/dev/null || printf 'tiling')
+    ok "back to the saved mode: $saved"
+
+    # The bar variant follows the saved mode, and only mode-set knows which
+    # that is — so ask it rather than duplicating the lookup here.
+    "$MONARCH_HOME/bin/monarch-mode-set" "$saved" --no-reload >/dev/null 2>&1 || true
+
+    [[ "$RELOAD" == true ]] && mode_reload
+    exit 0
+  fi
+
+  if [[ -z "$NAME" ]]; then
+    err "which mode?"
+    printf '\nAvailable:\n' >&2
+    mode_names | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  local dir
+  dir=$(mode_path "$NAME") || { err "no mode called '$NAME'"; exit 1; }
+  mode_load_meta "$dir/meta.toml" || die "'$NAME' has an unreadable meta.toml"
+
+  info "Switching to $NAME mode, for this session"
+
+  if [[ "$PLUGINS" == true ]] && ! mode_ensure_plugins; then
+    # No fallback dance here, unlike `mode set`. Nothing has been written yet,
+    # so doing nothing leaves the desktop exactly as it was — which for a
+    # temporary change is the right answer, and a clearer one than silently
+    # landing in a third mode.
+    err "$NAME needs ${MODE_REQUIRES[*]}, which would not load"
+    printf '\n  Try:  hyprpm update && hyprpm reload\n' >&2
+    printf '  Nothing was changed — you are still in %s mode.\n' \
+      "$(settings_mode 2>/dev/null || printf 'the current')" >&2
+    exit 1
+  fi
+
+  mode_write_overlay "$MODE_SESSION_CONF" "$dir" "$NAME" "session"
+  mode_write_waybar "$dir" "$NAME"
+  printf '%s\n' "$NAME" >"$MODE_SESSION_STATE"
+
+  local variant=${MODEMETA[bar_variant]:-standard}
+  local bar="$MONARCH_HOME/bin/monarch-bar-modules"
+  [[ -x "$bar" ]] && { MONARCH_HOME="$MONARCH_HOME" "$bar" "--$variant" >/dev/null 2>&1 || true; }
+
+  ok "$NAME for this session — saved default is still $(settings_mode 2>/dev/null || printf 'unset')"
+
+  [[ "$RELOAD" == true ]] && mode_reload
+}
+
+main "$@"

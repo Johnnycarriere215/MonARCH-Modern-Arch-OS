@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#DESC: Print the active mode
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_mode-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Print the mode in effect.
+
+Usage:
+  monarch mode current [--verbose] [--saved]
+
+  --verbose   also show the saved default, the fragment path and requirements
+  --saved     print the saved default rather than what is running now
+
+Bare output is one word, so it is safe in a prompt or a script. When a session
+override is active, that is what is printed — it is what you are looking at.
+EOF
+}
+
+VERBOSE=false
+WANT_SAVED=false
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)    usage; exit 0 ;;
+      -v|--verbose) VERBOSE=true ;;
+      --saved)      WANT_SAVED=true ;;
+      *) err "unknown argument: $1"; exit 1 ;;
+    esac
+    shift
+  done
+
+  local saved session=""
+  saved=$(settings_mode 2>/dev/null || printf 'tiling')
+  [[ -s "$MODE_SESSION_STATE" ]] && session=$(<"$MODE_SESSION_STATE")
+
+  local active=${session:-$saved}
+
+  if [[ "$WANT_SAVED" == true ]]; then
+    printf '%s\n' "$saved"
+    exit 0
+  fi
+
+  if [[ "$VERBOSE" == false ]]; then
+    printf '%s\n' "$active"
+    exit 0
+  fi
+
+  local dir
+  dir=$(mode_path "$active") || die "'$active' is the active mode but is not installed"
+  mode_load_meta "$dir/meta.toml" || die "'$active' has an unreadable meta.toml"
+
+  printf '%s%s%s' "$C_BOLD" "$active" "$C_RESET"
+  if [[ -n "$session" ]]; then
+    printf ' %s(this session only — saved default is %s)%s\n' "$C_YELLOW" "$saved" "$C_RESET"
+  else
+    printf '\n'
+  fi
+
+  printf '  %sdescription%s  %s\n' "$C_DIM" "$C_RESET" "${MODEMETA[description]:-}"
+  printf '  %spath%s         %s\n' "$C_DIM" "$C_RESET" "${dir/#$HOME/\~}"
+  printf '  %sbar variant%s  %s\n' "$C_DIM" "$C_RESET" "${MODEMETA[bar_variant]:-standard}"
+
+  if [[ ${#MODE_REQUIRES[@]} -gt 0 ]]; then
+    printf '  %srequires%s     %s\n' "$C_DIM" "$C_RESET" "${MODE_REQUIRES[*]}"
+    local plugin state
+    for plugin in "${MODE_REQUIRES[@]}"; do
+      if hyprctl plugin list 2>/dev/null | grep -qi "$plugin"; then
+        state="${C_GREEN}loaded${C_RESET}"
+      else
+        state="${C_RED}NOT loaded${C_RESET}"
+      fi
+      printf '               %s %b\n' "$plugin" "$state"
+    done
+  fi
+}
+
+main "$@"

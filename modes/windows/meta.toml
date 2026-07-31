@@ -1,0 +1,23 @@
+# MonARCH — windows mode
+#
+# The reason MonARCH exists rather than being a fork of something terminal-only:
+# a desktop somebody coming from Windows 11 can use on day one, without giving
+# up the machine underneath.
+
+name = "windows"
+description = "Title bars, close buttons, a taskbar, floating by default."
+
+# hyprbars draws the title bars. It is a hyprpm plugin, not a package, and it
+# compiles against a PINNED Hyprland version — a Hyprland update will break it,
+# every time, and the failure mode is the plugin silently not loading.
+#
+# monarch-mode-set treats this list generically: it does not know what hyprbars
+# is, only that this mode says it needs it and where to go if it cannot have it.
+requires = ["hyprbars"]
+
+# Where to land when a requirement will not load. Without this, a broken plugin
+# leaves a session with floating windows and NO title bars and no way to close
+# anything with the mouse — which is worse than either mode on its own.
+fallback = "tiling"
+
+bar_variant = "standard"

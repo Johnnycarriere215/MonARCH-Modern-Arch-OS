@@ -84,6 +84,30 @@ stage_30_apply_bar() {
     || warn "could not configure bar modules — the bar will start without stats"
 }
 
+stage_30_apply_mode() {
+  # mode.conf, mode-session.conf and the bar's mode-overrides.jsonc are all
+  # generated. hyprland.conf sources the first two unconditionally, and
+  # config.jsonc now takes its position/height/left/center from the third — so
+  # this has to run, and it runs after the bar so the mode has the last word on
+  # which stats variant is in use.
+  local apply="$MONARCH_HOME/bin/monarch-mode-set"
+  [[ -x "$apply" ]] || die "missing $apply — cannot set the desktop mode"
+
+  local settings="${XDG_CONFIG_HOME:-$HOME/.config}/monarch/settings.toml"
+  local mode="tiling"
+  if [[ -f "$settings" ]]; then
+    mode=$(sed -n 's/^[[:space:]]*mode[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+      "$settings" | head -n1)
+    [[ -n "$mode" ]] || mode="tiling"
+  fi
+
+  info "Setting desktop mode: $mode"
+  # --no-plugins: hyprpm compiles against the RUNNING Hyprland and there is no
+  # session during an install. Windows mode picks its plugin up at first use.
+  MONARCH_HOME="$MONARCH_HOME" "$apply" "$mode" --no-reload --no-plugins \
+    || die "could not set mode '$mode'"
+}
+
 stage_30_link_cli() {
   local bindir="$HOME/.local/bin"
   info "Linking the monarch CLI into $bindir"
@@ -129,6 +153,7 @@ stage_30_config() {
   stage_30_apply_theme
   stage_30_apply_keys
   stage_30_apply_bar
+  stage_30_apply_mode
   stage_30_link_cli
   stage_30_path
 }

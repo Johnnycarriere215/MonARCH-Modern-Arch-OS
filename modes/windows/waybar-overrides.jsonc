@@ -1,0 +1,39 @@
+// MonARCH — windows mode, bar layout
+//
+// Bar at the bottom with a taskbar, which is what the mode is for. The
+// workspace pills stay: they are the one thing from tiling worth keeping, and
+// they read as "virtual desktops" to someone arriving from Windows.
+//
+// wlr/taskbar is what makes minimise work. SUPER+M sends a window to the
+// special:minimized workspace; the taskbar still lists it, because it lists
+// toplevels rather than workspaces, and clicking the entry brings it back.
+// Without this module, minimise is a black hole.
+{
+  "layer": "top",
+  "position": "bottom",
+  "height": 40,
+
+  "modules-left": [
+    "hyprland/workspaces"
+  ],
+
+  "modules-center": [
+    "wlr/taskbar"
+  ],
+
+  "wlr/taskbar": {
+    "format": "{icon} {title:.22}",
+    "icon-size": 18,
+    "icon-theme": "Adwaita",
+    "tooltip-format": "{title}\n{app_id}",
+    "on-click": "activate",
+    "on-click-middle": "close",
+    "on-click-right": "minimize",
+    "active-first": false,
+    "all-outputs": false,
+    // The bar is the only way back from a minimise, so nothing may be hidden
+    // from it. Waybar's default ignore-list is empty; this is here to say that
+    // leaving it empty is a decision, not an oversight.
+    "ignore-list": []
+  }
+}

@@ -19,28 +19,29 @@
 //                        placed, and in what order. `monarch bar modules`
 //                        writes it from bar_modules in settings.toml.
 //
-// Note there is no "modules-right" in THIS file. Waybar's own config takes
-// precedence over an include, so defining it here would make the generated file
-// silently ineffective — the kind of bug that costs an afternoon.
+// mode-overrides.jsonc   GENERATED. Copied from modes/<name>/waybar-overrides
+//                        .jsonc by `monarch mode set`. Owns layer, position,
+//                        height, modules-left and modules-center — windows mode
+//                        puts the bar at the bottom with a taskbar, performance
+//                        mode drops the window title.
+//
+// Note what is NOT in this file: modules-right, modules-left, modules-center,
+// position, height. Waybar's own config takes precedence over an include, so
+// anything defined here could never be overridden by a generated file — it
+// would silently win, and the generated file would appear to do nothing. That
+// is the kind of bug that costs an afternoon, so those keys live only in the
+// files that own them.
+//
+// What IS here: module DEFINITIONS. Defining a module the bar never places
+// costs nothing.
 {
   "include": [
+    "~/.config/waybar/mode-overrides.jsonc",
     "~/.config/waybar/modules-active.jsonc",
     "~/.config/waybar/modules-enabled.jsonc"
   ],
 
-  "layer": "top",
-  "position": "top",
-  "height": 34,
   "spacing": 0,
-
-  "modules-left": [
-    "hyprland/workspaces",
-    "hyprland/submap"
-  ],
-
-  "modules-center": [
-    "hyprland/window"
-  ],
 
 
   // ─────────────────────────────────────────────────────────────── left ───

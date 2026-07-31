@@ -1,0 +1,20 @@
+// MonARCH — performance mode, bar layout
+//
+// Same position as tiling, minus the window title. The title module updates on
+// every focus change and every time an application rewrites its own title,
+// which for a browser is constantly — it is the busiest module in the bar and
+// the one worth dropping first.
+//
+// The stats group thins out separately: meta.toml asks for the "performance"
+// bar variant, which is CPU and RAM only at 10s with nothing forking.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+
+  "modules-left": [
+    "hyprland/workspaces"
+  ],
+
+  "modules-center": []
+}

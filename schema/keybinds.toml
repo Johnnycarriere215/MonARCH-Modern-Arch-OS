@@ -663,6 +663,16 @@ flags = "el"
 
 # ═════════════════════════════════════════════════════════════════ appearance ══
 
+# Cycles tiling -> windows -> performance -> tiling for THIS session, leaving
+# the saved default alone. `monarch mode set` is the one that sticks.
+[[bind]]
+id = "mode-cycle"
+keys = "SUPER SHIFT, D"
+dispatcher = "exec"
+action = "monarch-mode-cycle"
+group = "Appearance"
+label = "Next desktop mode (this session)"
+
 [[bind]]
 id = "background-next"
 keys = "SUPER SHIFT, W"

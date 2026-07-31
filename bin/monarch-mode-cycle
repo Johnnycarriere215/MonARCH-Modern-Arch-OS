@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#DESC: Step to the next mode, for this session only
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_mode-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Step to the next mode in alphabetical order, for this session only.
+
+Usage:
+  monarch mode cycle
+
+Bound to SUPER+SHIFT+D. Session-only deliberately: a key you can hit by
+accident should not change what the machine boots into. `monarch mode set` is
+the one that sticks.
+EOF
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
+modes=()
+while IFS= read -r m; do modes+=("$m"); done < <(mode_names)
+[[ ${#modes[@]} -gt 1 ]] || die "only one mode is installed — nothing to cycle to"
+
+current=$("$MONARCH_HOME/bin/monarch-mode-current")
+
+start=0
+for i in "${!modes[@]}"; do
+  if [[ "${modes[i]}" == "$current" ]]; then
+    start=$i
+    break
+  fi
+done
+
+# Step past any mode that will not apply — windows mode with hyprbars broken is
+# the case that matters, and a key that appears to do nothing is worse than one
+# that skips. Give up after a full lap rather than looping.
+notify() {
+  have notify-send || return 0
+  notify-send -a MonARCH -t 2000 "$1" "$2" || true
+}
+
+n=${#modes[@]}
+for ((hop = 1; hop < n; hop++)); do
+  target=${modes[$(( (start + hop) % n ))]}
+
+  if "$MONARCH_HOME/bin/monarch-mode-session" "$target" >/dev/null 2>&1; then
+    notify "Mode: $target" "This session only"
+    exit 0
+  fi
+
+  step "skipped $target — its requirements are not met"
+done
+
+notify "Mode unchanged" "No other mode can be applied right now"
+die "no other mode could be applied — try: monarch mode set <name>"

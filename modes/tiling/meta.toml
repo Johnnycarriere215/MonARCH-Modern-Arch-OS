@@ -1,0 +1,20 @@
+# MonARCH — tiling mode
+#
+# The default. Everything that makes MonARCH what it is, with nothing turned
+# off and nothing added.
+
+name = "tiling"
+description = "Hyprland as intended. Keyboard-first, windows tile, effects on."
+
+# hyprpm plugins this mode cannot work without. Empty is the good case: a mode
+# with no requirements can never fail to apply.
+requires = []
+
+# Where to go if a requirement will not load. Tiling is everyone's fallback and
+# has none of its own — if this mode fails there is nowhere left to fall.
+fallback = ""
+
+# Which set of Waybar stat modules to use. Handed to `monarch bar modules`, so
+# the mode states its preference as data rather than the mode system knowing
+# anything about bars.
+bar_variant = "standard"

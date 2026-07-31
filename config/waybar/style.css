@@ -191,6 +191,39 @@ window#waybar.empty .modules-center {
 /* Never coloured by state: throughput being high is what a network is for. */
 #network.throughput { color: @fg_dim; }
 
+/* ────────────────────────────────────────────────────────── taskbar ─── */
+
+/* Windows mode only — nothing places wlr/taskbar in the other modes, and a
+ * rule for a module that is not there costs nothing. It lives in this file
+ * rather than in the mode fragment because a mode owns layout, and the theme
+ * owns colour; a stylesheet per mode would be a second palette to keep in
+ * step. */
+#taskbar button {
+  color: @fg_dim;
+  background: transparent;
+  padding: 0 10px;
+  margin: 3px 2px;
+  border-radius: 7px;
+  border-bottom: 2px solid transparent;
+}
+
+#taskbar button.active {
+  color: @fg;
+  background-color: @surface;
+  border-bottom: 2px solid @accent;
+}
+
+/* A minimised window is still listed — that is the only way back to it. Dim,
+ * so the pile of minimised things does not compete with what is on screen. */
+#taskbar button.minimized {
+  color: @fg_faint;
+}
+
+#taskbar button:hover {
+  background-color: @overlay;
+  color: @fg;
+}
+
 /* Tooltips — calendar, network details, battery estimate. */
 tooltip {
   background-color: @bg_alt;

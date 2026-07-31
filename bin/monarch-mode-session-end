@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#DESC: Clear a leftover session mode. Run once at login by autostart.conf
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_mode-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Clear a session mode left over from last time.
+
+Usage:
+  monarch mode session-end
+
+autostart.conf runs this once per login. There is no reason to run it by hand;
+`monarch mode session --off` is the one you want.
+
+Why it exists
+
+  A session mode is an overlay file that Hyprland sources. Removing it has to
+  happen from inside the session, which is necessarily AFTER Hyprland has
+  already parsed it — so a mode set yesterday is briefly in effect today.
+
+  This clears the file and, only if there was one to clear, reloads. The
+  wrong mode is on screen for about a second at login rather than for the
+  whole session.
+EOF
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
+mkdir -p "$MONARCH_STATE_DIR"
+
+if [[ ! -s "$MODE_SESSION_STATE" ]]; then
+  # The common case, every login. Say nothing and do not reload.
+  mode_write_empty "$MODE_SESSION_CONF"
+  exit 0
+fi
+
+stale=$(<"$MODE_SESSION_STATE")
+saved=$(settings_mode 2>/dev/null || printf 'tiling')
+
+mode_write_empty "$MODE_SESSION_CONF"
+: >"$MODE_SESSION_STATE"
+
+# Put the bar and the stats variant back where the saved mode wants them. The
+# hypr side is already handled by the empty overlay above plus the reload.
+"$MONARCH_HOME/bin/monarch-mode-set" "$saved" --no-reload --no-plugins >/dev/null 2>&1 || true
+
+info "cleared last session's '$stale' mode — back to $saved"
+mode_reload

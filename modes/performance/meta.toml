@@ -1,0 +1,20 @@
+# MonARCH — performance mode
+#
+# For battery, for a long compile, and for the moment the fans come on. Nothing
+# here changes how the desktop WORKS — the keys and the layout are identical to
+# tiling mode. It only stops the compositor spending the GPU on decoration.
+#
+# Worth being honest about the size of the win: on Intel UHD 620, blur is the
+# expensive one by a wide margin. Shadows and rounding cost a little. Turning
+# animations off saves almost no power at all — it is in here because a machine
+# that is struggling feels faster without them, not because it draws less.
+
+name = "performance"
+description = "Effects off, minimal bar. For battery or a heavy build."
+
+requires = []
+fallback = ""
+
+# CPU and RAM only, polled at 10s, nothing forking. Shipped by T5 as
+# config/waybar/modules-system-performance.jsonc.
+bar_variant = "performance"

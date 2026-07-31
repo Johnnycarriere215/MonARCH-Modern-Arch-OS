@@ -1,0 +1,23 @@
+// MonARCH — tiling mode, bar layout
+//
+// Copied to ~/.config/waybar/mode-overrides.jsonc by `monarch mode set` and
+// included FIRST by config.jsonc.
+//
+// These four keys are not in config.jsonc at all. Waybar's own config takes
+// precedence over an include, so a key defined there could never be overridden
+// by a mode — which is why position, height, modules-left and modules-center
+// live here and only here. The right-hand group is `monarch bar modules`'s.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 34,
+
+  "modules-left": [
+    "hyprland/workspaces",
+    "hyprland/submap"
+  ],
+
+  "modules-center": [
+    "hyprland/window"
+  ]
+}

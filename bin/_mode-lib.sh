@@ -1,0 +1,280 @@
+#!/usr/bin/env bash
+#
+# Mode internals: finding modes, reading meta.toml, writing the overlay files.
+#
+# Not a command — the leading underscore keeps it out of the dispatcher's scan.
+# Source it after _lib.sh, with MONARCH_HOME already resolved.
+#
+# ──────────────────────────────────────────────── how a mode is applied ─────
+#
+# Golden rule 4: modes are DATA. There is no `if mode == "windows"` anywhere in
+# MonARCH, and there must not be one. Everything a mode does is stated in its
+# own directory:
+#
+#   modes/<name>/hypr.conf              Hyprland settings, deltas only
+#   modes/<name>/waybar-overrides.jsonc bar layout
+#   modes/<name>/meta.toml              name, description, requires, fallback,
+#                                       bar_variant
+#
+# HYPRLAND — no merging code exists, because Hyprland already merges. A later
+# assignment overrides an earlier one, and `hyprland.conf` sources mode.conf
+# LAST. So a fragment only has to state what differs from the base, and
+# reverting a mode is switching which file gets sourced. Nothing is edited,
+# nothing is diffed, nothing has to be undone.
+#
+# Two overlay files, not one:
+#
+#   mode.conf           the SAVED mode. Written by `monarch mode set`.
+#   mode-session.conf   a mode for this session only. Written by
+#                       `monarch mode session`, and removed at the start of the
+#                       next session by `monarch mode session-end`, which
+#                       autostart.conf runs. Sourced after mode.conf, so it
+#                       wins while it exists.
+#
+# The first-run wizard (T10) asks "use which now?" and "default to which?" as
+# two separate questions, which is why both paths exist.
+#
+# WAYBAR — the same trick, because Waybar's own config takes precedence over an
+# include: config.jsonc does not define position, height, modules-left or
+# modules-center at all. The mode fragment is the only thing that does. The
+# stats group is left to `monarch bar modules`, which a mode steers through
+# bar_variant in its meta.toml rather than by writing the bar's files itself.
+
+# ------------------------------------------------------------------- paths ---
+
+# A mode you wrote shadows one MonARCH ships, same arrangement as themes.
+MONARCH_MODE_DIRS=(
+  "$MONARCH_CONFIG_DIR/monarch/modes"
+  "$MONARCH_HOME/modes"
+)
+
+MODE_CONF="$MONARCH_CONFIG_DIR/hypr/mode.conf"
+MODE_SESSION_CONF="$MONARCH_CONFIG_DIR/hypr/mode-session.conf"
+MODE_WAYBAR_OUT="$MONARCH_CONFIG_DIR/waybar/mode-overrides.jsonc"
+MODE_SESSION_STATE="$MONARCH_STATE_DIR/mode-session"
+MONARCH_SETTINGS_FILE="$MONARCH_CONFIG_DIR/monarch/settings.toml"
+
+mode_path() {
+  local name=$1 dir
+  for dir in "${MONARCH_MODE_DIRS[@]}"; do
+    [[ -f "$dir/$name/meta.toml" ]] && { printf '%s' "$dir/$name"; return 0; }
+  done
+  return 1
+}
+
+mode_names() {
+  local dir entry
+  for dir in "${MONARCH_MODE_DIRS[@]}"; do
+    [[ -d "$dir" ]] || continue
+    for entry in "$dir"/*/; do
+      [[ -f "$entry/meta.toml" ]] || continue
+      basename "$entry"
+    done
+  done | sort -u
+}
+
+# ------------------------------------------------------------- meta.toml ---
+
+# Flat key = value, plus arrays. Small enough to want its own parser rather
+# than bending the theme engine's, which has no notion of a list.
+declare -gA MODEMETA=()
+MODE_REQUIRES=()
+
+mode_load_meta() {
+  local file=$1 line key value
+  MODEMETA=(); MODE_REQUIRES=()
+
+  [[ -f "$file" ]] || { err "no meta.toml at $file"; return 1; }
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line=${line#"${line%%[![:space:]]*}"}
+    [[ -z "$line" || "$line" == \#* || "$line" == \[* ]] && continue
+    [[ "$line" =~ ^([A-Za-z0-9_]+)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+
+    if [[ "$value" == \[* ]]; then
+      # ["a", "b"] -> one element per array entry.
+      value=${value#\[}
+      value=${value%%\]*}
+      local item
+      while IFS= read -r item; do
+        [[ -n "$item" ]] && MODE_REQUIRES+=("$item")
+      done < <(printf '%s' "$value" | tr ',' '\n' | sed 's/[[:space:]"]//g' | grep -v '^$' || true)
+      MODEMETA["$key"]="array"
+      continue
+    fi
+
+    if [[ "$value" == \"* ]]; then
+      value=${value#\"}; value=${value%%\"*}
+    else
+      value=${value%%#*}
+      value=${value%"${value##*[![:space:]]}"}
+    fi
+    MODEMETA["$key"]=$value
+  done <"$file"
+
+  [[ -n "${MODEMETA[name]:-}" ]] || { err "$file has no name"; return 1; }
+}
+
+# ------------------------------------------------------------- generation ---
+
+# The overlay is a one-line `source =` rather than a copy of the fragment. A
+# copy would go stale the moment the mode was edited or updated; this way the
+# fragment stays the only copy, and `monarch mode set` is only ever changing
+# which file Hyprland is pointed at.
+mode_write_overlay() {
+  local target=$1 dir=$2 name=$3 kind=$4
+
+  mkdir -p "$(dirname "$target")"
+  local tmp="$target.monarch-tmp"
+  {
+    printf '# GENERATED BY MONARCH — DO NOT EDIT\n#\n'
+    printf '# Mode: %s (%s)\n' "$name" "$kind"
+    printf '# Regenerate with: monarch mode %s <name>\n#\n' \
+      "$([[ "$kind" == session ]] && printf 'session' || printf 'set')"
+    printf '# Sourced last by hyprland.conf, so everything here overrides the base\n'
+    printf '# configuration. The mode itself is the file below — edit that, not this.\n\n'
+    printf 'source = %s/hypr.conf\n' "$dir"
+  } >"$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$target"
+}
+
+# Hyprland needs a mode.conf to exist even when no mode has been set, because
+# hyprland.conf sources it unconditionally and a missing source is a parse
+# error on some versions.
+mode_write_empty() {
+  local target=$1
+  mkdir -p "$(dirname "$target")"
+  {
+    printf '# GENERATED BY MONARCH — DO NOT EDIT\n#\n'
+    printf '# No session mode is active. `monarch mode session <name>` fills this in\n'
+    printf '# for one session; `monarch mode session-end` empties it again at the\n'
+    printf '# start of the next one.\n'
+  } >"$target"
+  chmod 0644 "$target"
+}
+
+mode_write_waybar() {
+  local dir=$1 name=$2
+  local src="$dir/waybar-overrides.jsonc"
+
+  [[ -f "$src" ]] || { warn "$name has no waybar-overrides.jsonc — leaving the bar alone"; return 0; }
+
+  mkdir -p "$(dirname "$MODE_WAYBAR_OUT")"
+  local tmp="$MODE_WAYBAR_OUT.monarch-tmp"
+  {
+    printf '// GENERATED BY MONARCH — DO NOT EDIT\n'
+    printf '//\n'
+    printf '// Copied from modes/%s/waybar-overrides.jsonc by `monarch mode set`.\n' "$name"
+    printf '// Edit the mode, not this file.\n'
+    printf '//\n'
+    printf '// A copy rather than a symlink: Waybar resolves an include relative to the\n'
+    printf '// file it appears in, and a link into the repo would break the moment the\n'
+    printf '// checkout moved.\n'
+    grep -v '^[[:space:]]*//' "$src"
+  } >"$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$MODE_WAYBAR_OUT"
+}
+
+# ---------------------------------------------------------------- plugins ---
+
+# requires = ["hyprbars"] in meta.toml. Each entry is a hyprpm plugin name.
+# Nothing here knows what hyprbars is or which mode wants it — that is the
+# whole point of golden rule 4.
+#
+# Returns 1 if a required plugin could not be made to load.
+mode_ensure_plugins() {
+  local plugin missing=0
+
+  [[ ${#MODE_REQUIRES[@]} -gt 0 ]] || return 0
+
+  if ! have hyprpm; then
+    warn "hyprpm is not installed — cannot load: ${MODE_REQUIRES[*]}"
+    return 1
+  fi
+
+  if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    # hyprpm builds against the running Hyprland's headers and needs a session
+    # to talk to. During an install there is not one yet.
+    warn "not inside a Hyprland session — plugins will be loaded at next login"
+    return 0
+  fi
+
+  for plugin in "${MODE_REQUIRES[@]}"; do
+    if hyprctl plugin list 2>/dev/null | grep -qi "$plugin"; then
+      step "$plugin already loaded"
+      continue
+    fi
+
+    info "Loading $plugin"
+
+    # hyprpm compiles a plugin against a PINNED Hyprland version. A Hyprland
+    # update WILL break it, and the failure looks like "the plugin is just
+    # gone" rather than like an error. `hyprpm update` rebuilds against the
+    # running version, so try that before giving up.
+    if ! hyprpm list 2>/dev/null | grep -qi "$plugin"; then
+      step "fetching the hyprland-plugins repository"
+      hyprpm add https://github.com/hyprwm/hyprland-plugins >/dev/null 2>&1 || true
+    fi
+
+    hyprpm update >/dev/null 2>&1 || true
+    hyprpm enable "$plugin" >/dev/null 2>&1 || true
+    hyprpm reload -n >/dev/null 2>&1 || true
+
+    if hyprctl plugin list 2>/dev/null | grep -qi "$plugin"; then
+      ok "$plugin loaded"
+    else
+      err "$plugin would not load"
+      missing=1
+    fi
+  done
+
+  return $missing
+}
+
+# --------------------------------------------------------------- settings ---
+
+settings_mode() {
+  local value
+  [[ -f "$MONARCH_SETTINGS_FILE" ]] || return 1
+  value=$(sed -n 's/^[[:space:]]*mode[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$MONARCH_SETTINGS_FILE" | head -n1)
+  [[ -n "$value" ]] || return 1
+  printf '%s' "$value"
+}
+
+settings_write_mode() {
+  local value=$1 tmp
+  [[ -f "$MONARCH_SETTINGS_FILE" ]] || { warn "no settings.toml — not recording the mode"; return 0; }
+  grep -q '^[[:space:]]*mode[[:space:]]*=' "$MONARCH_SETTINGS_FILE" || {
+    warn "settings.toml has no 'mode' key — not adding one"; return 0; }
+
+  tmp=$(mktemp)
+  awk -v v="$value" '
+    !done && /^[[:space:]]*mode[[:space:]]*=/ { print "mode = \"" v "\""; done = 1; next }
+    { print }
+  ' "$MONARCH_SETTINGS_FILE" >"$tmp"
+  cat "$tmp" >"$MONARCH_SETTINGS_FILE"
+  rm -f "$tmp"
+}
+
+# ---------------------------------------------------------------- reloads ---
+
+mode_reload() {
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && have hyprctl; then
+    hyprctl reload >/dev/null 2>&1 && step "reloaded Hyprland"
+  fi
+
+  # A changed bar LAYOUT needs a restart, not a SIGUSR2 — the widgets are built
+  # at start-up. Same reason as monarch-bar-modules.
+  if have waybar && pgrep -x waybar >/dev/null 2>&1; then
+    pkill -x waybar || true
+    setsid waybar >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+    step "restarted waybar"
+  fi
+}

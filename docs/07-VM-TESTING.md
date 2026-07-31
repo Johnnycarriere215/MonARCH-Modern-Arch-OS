@@ -117,7 +117,27 @@ of those fails it says which. Everything is logged to
    unless `intel-gpu-tools` is installed — the tooltip says which you are
    looking at.
 
-9. **`monarch keys reset --yes`** and confirm the desktop still has keys. It is
+9. **Modes** (T6). This is the fragile one — hyprbars is a plugin compiled
+   against one Hyprland version.
+   ```bash
+   monarch mode list
+   monarch mode session performance   # effects off, bar thins out, keys unchanged
+   monarch mode set windows           # THE ONE THAT MATTERS
+   ```
+   Windows mode should give every window a title bar with three buttons, the
+   bar at the bottom with a taskbar, and floating windows. **If hyprbars will
+   not load it must say so and land you in tiling** — never floating windows
+   with no title bars. Either outcome is a pass for the fallback; a session
+   with no title bars and no message is the failure.
+
+   Then `SUPER+M` to minimise and click the taskbar entry to bring it back,
+   which is the whole point of the mode.
+
+   Reboot and confirm windows mode survived. Then `monarch mode session tiling`,
+   reboot again, and confirm you are back in windows mode — a session mode must
+   not persist.
+
+10. **`monarch keys reset --yes`** and confirm the desktop still has keys. It is
    the recovery path if a rebind goes wrong, so it is worth knowing it works
    before you need it.
 

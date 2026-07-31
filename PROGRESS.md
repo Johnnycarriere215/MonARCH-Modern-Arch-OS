@@ -10,8 +10,8 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 ## Current state
 
 **Phase:** 2 — The system layer
-**Next task:** T6 — Mode system
-**Blocked on:** nothing — but **nothing in T1–T5 has ever been run on Arch.** Five tasks of work are now stacked on a desktop that has never booted. The VM test (Phase 0.4/0.5, full procedure in `docs/07-VM-TESTING.md`) is overdue and gets more expensive to defer with every task.
+**Next task:** T7 — Update system
+**Blocked on:** nothing — but **nothing in T1–T6 has ever been run on Arch.** Six tasks of work are now stacked on a desktop that has never booted, and T6 in particular ships a fatal-on-failure migration and a plugin that Hyprland updates are known to break. The VM test (Phase 0.4/0.5, full procedure in `docs/07-VM-TESTING.md`) is overdue and gets more expensive to defer with every task.
 
 ---
 
@@ -175,23 +175,32 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 ---
 
 ### T6 — Mode system · Opus
-**Status:** TODO
+**Status:** DONE (code complete, locally verified — **awaiting first run on Arch**)
 
 **Done when:**
-- [ ] `modes/{tiling,windows,performance}/` each have `hypr.conf`, `waybar-overrides.jsonc`, `meta.toml`
-- [ ] `monarch-mode-set` persists and survives reboot
-- [ ] `monarch-mode-session` applies for one session **without** changing the saved default
-- [ ] Windows mode gives title bars, close buttons, floating default, bottom bar, taskbar
-- [ ] Minimize = `movetoworkspacesilent special:minimized`, restore via `wlr/taskbar`
-- [ ] **`hyprbars` failure falls back to tiling with a clear warning** — never a session with no title bars and no explanation
-- [ ] No `if mode == ...` anywhere. Modes are data
+- [x] `modes/{tiling,windows,performance}/` each have `hypr.conf`, `waybar-overrides.jsonc`, `meta.toml`
+- [x] `monarch-mode-set` persists and survives reboot — writes `mode.conf` and `mode = ` in `settings.toml`
+- [x] `monarch-mode-session` applies for one session **without** changing the saved default — cleared at next login by `monarch mode session-end`, which `autostart.conf` runs
+- [x] Windows mode gives title bars, close buttons, floating default, bottom bar, taskbar
+- [x] Minimize = `movetoworkspacesilent special:minimized`, restore via `wlr/taskbar`
+- [x] **`hyprbars` failure falls back to tiling with a clear warning** — exercised: with no `hyprpm` on this box, `mode set windows` warns, explains the pinned-version problem, lands in tiling and exits 1
+- [x] No `if mode == ...` anywhere. Modes are data — grep the tree; the word "windows" appears in no script
 
 **Notes:**
 
-- **The performance mode's bar already exists.** T5 shipped `config/waybar/modules-system-performance.jsonc` — CPU and RAM only, both at 10s, nothing forking. Point performance mode's `waybar-overrides.jsonc` at it, or have the mode move the `modules-active.jsonc` symlink (`monarch bar modules --performance` does exactly that). Do not write a third copy.
-- **Three generated files now exist that a mode switch must not fight with:** `hypr/bindings.conf` (T4), `monarch/theme/*` (T3) and `waybar/modules-enabled.jsonc` + the `modules-active.jsonc` symlink (T5). A mode that wants different bindings or a different bar should go through the owning command, not write those files itself.
-
----
+- **The merge is Hyprland's, not ours.** `hyprland.conf` sources `mode.conf` and `mode-session.conf` LAST, and a later assignment overrides an earlier one. So a fragment states only its deltas, and switching modes is only changing which file gets sourced. **There is no undo step and no diffing** — `hyprctl reload` re-parses the whole config from defaults, so leaving a mode is enough to leave its settings behind. Window rules are cleared and rebuilt on reload for the same reason.
+- **`modes/tiling/hypr.conf` is deliberately empty**, and the comment in it is the argument for the whole design. The base config *is* tiling mode. My first draft restated the blur/animation/gap settings there as "restore" lines and added `windowrulev2 = tile, class:^(.*)$` — **that rule would have clobbered the dialog float rules in `windows.conf`**, since it is sourced later. Both were wrong; the file being empty is right.
+- **Two overlay files, not one.** `mode.conf` = saved, `mode-session.conf` = this session. The session file cannot be removed before Hyprland parses it — nothing runs that early — so `monarch mode session-end` runs from `autostart.conf`, clears it and reloads *only if there was something to clear*. A session mode set yesterday is on screen for about a second today, then goes. That second is the honest cost of the design.
+- **`hyprland.conf` sources `mode-session.conf` unconditionally**, so `monarch mode set` creates an empty one when it is missing. **This was a real bug found in testing:** a fresh install had no `mode-session.conf` at all, and on some Hyprland versions a missing `source` is a parse error — which would have meant a desktop that does not come up.
+- **Waybar: `config.jsonc` no longer defines `position`, `height`, `modules-left` or `modules-center`.** Waybar's own config takes precedence over an include, so a mode could never have overridden them. They live only in `modes/<name>/waybar-overrides.jsonc` now. This is the same trap T5 hit with `modules-right` and the second time it has bitten — the comment in `config.jsonc` names all five keys.
+- **`requires` and `fallback` are data, and that is what keeps golden rule 4.** `mode_ensure_plugins` iterates `requires` and hands each name to `hyprpm`; it does not know what hyprbars is, only that windows mode asks for it and names tiling as where to go if it cannot have it. Adding a plugin-dependent mode is adding a directory.
+- **`mode set` verifies the plugin actually loaded, and this matters more than it looks.** Hyprland keeps configuration for plugins that are not loaded rather than erroring, so the `plugin { hyprbars { … } }` block in windows mode is silently inert on failure. Without the check you would get floating windows with no title bars and no explanation — worse than either mode.
+- **`mode session` does not fall back**, unlike `mode set`. Nothing has been written at that point, so doing nothing leaves the desktop as it was, which for a temporary change is clearer than silently landing in a third mode.
+- **`monarch mode cycle` (SUPER+SHIFT+D) skips modes it cannot apply.** With hyprbars broken, cycling goes tiling → performance → tiling rather than appearing to do nothing. Session-only on purpose: a key you can hit by accident should not change what the machine boots into.
+- **`modes/` is read from the repo**, with `~/.config/monarch/modes/<name>/` shadowing — the same arrangement as `themes/`, and unlike `config/`, which is deployed. That is why `mode.conf` contains an absolute path into the checkout.
+- **The performance mode's savings are honestly ranked in its `meta.toml`:** blur is most of it on UHD 620, shadows and rounding are a little, and turning animations off saves almost nothing — it is in there because a struggling machine *feels* faster without them.
+- **`migrations/1785533308.sh` ships with this task, and is the first FATAL migration.** Every other one warns and continues. This one creates the two files `hyprland.conf` now sources unconditionally; without them an updated machine gets a Hyprland that cannot parse its config, which is a blank screen rather than a degraded desktop.
+- **`exec-once = hyprpm reload -n` is new in `autostart.conf`.** Plugins do not survive a Hyprland update and need reloading each session.
 
 ### T7 — Update system · Sonnet
 **Status:** TODO
@@ -337,4 +346,5 @@ DATE | TASK | OUTCOME | NOTES FOR NEXT SESSION
 2026-07-31 | T3 | DONE (unverified on Arch) | Theme engine: schema/theme.toml, 8 self-describing templates, theme apply/list/current/install/remove, background set/next, 3 original palettes, hyprpaper added. Palette files no longer shipped in config/ — install stage 30 renders them. Migration 1785505659 ships with it. NOTE: the previous session said do the VM test before T3 and it still has not happened — three tasks now sit on a desktop that has never booted. Walker and VS Code theming are the two pieces that CANNOT be verified without it. Next: T4 (keybinds), or better, the VM.
 2026-07-31 | T4 | DONE (unverified on Arch) | schema/keybinds.toml (65 binds), _keys-lib.sh with an arrays-of-tables TOML parser, keys apply/check/list/reset. Placeholder bindings.conf deleted from the repo — install stage 30 generates it, same as the palette. Migration 1785529604 keeps any pre-T4 copy. Bound the help screen to Super+/ not Super+K, reasons in the T4 notes. cliphist added. Still nothing has booted; docs/07-VM-TESTING.md is the procedure. Next: T5 (Waybar stats) — its notes already say to use the semantic colours.
 2026-07-31 | T5 | DONE (unverified on Arch) | Waybar stats: modules-system.jsonc (cpu/memory/custom-gpu/network throughput/disk) wired through Waybar's include, monarch-bar-modules for enable/disable/order/reset/--performance, monarch-bar-gpu with a three-tier degrade. config.jsonc no longer defines modules-right — the generated modules-enabled.jsonc does, because an include cannot override the parent. btop presets pinned so a click drills into the right box. Migration 1785531465. Idle cost ESTIMATED at ~0.2%, not measured. The GPU fallback is the only thing in T3-T5 that has run on real Intel hardware. Next: T6 (modes) — or the VM, which is now five tasks overdue.
+2026-07-31 | T6 | DONE (unverified on Arch) | Mode system as a sourced overlay: hyprland.conf sources mode.conf + mode-session.conf last, so Hyprland does the merging and nothing needs undoing. tiling/windows/performance fragments, mode set/session/session-end/current/list/cycle. hyprbars handled generically through requires[]/fallback in meta.toml — verified the fallback fires. Waybar's position/height/left/center moved out of config.jsonc into the mode fragment (the include-precedence trap, second time). Found and fixed a real bug: fresh installs had no mode-session.conf for a file hyprland.conf sources unconditionally. Migration 1785533308 is FATAL on failure, unlike the others. Next: T7 (updates) — and the task list says stop and live in it for a week after T8.
 ```

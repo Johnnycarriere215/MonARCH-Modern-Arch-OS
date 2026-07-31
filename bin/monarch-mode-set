@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+#DESC: Switch desktop mode and keep it that way
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_mode-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Switch desktop mode, and make it the one you get after a reboot.
+
+Usage:
+  monarch mode set <name> [--no-reload] [--no-plugins]
+
+  --no-reload    write the files but leave the running session alone
+  --no-plugins   do not try to load the mode's hyprpm plugins
+
+  monarch mode session <name>   the same, for THIS session only
+
+Modes are data, not code: everything a mode does is in modes/<name>/, and
+switching one is only changing which file Hyprland sources last. Nothing is
+edited and nothing has to be undone — `hyprctl reload` re-parses from defaults,
+so leaving a mode is enough to leave its settings behind.
+
+If a mode needs a plugin that will not load, it falls back to the mode named in
+its meta.toml rather than leaving you somewhere neither one works.
+EOF
+}
+
+NAME=""
+RELOAD=true
+PLUGINS=true
+
+apply_mode() {
+  local name=$1 dir=$2
+
+  mode_write_overlay "$MODE_CONF" "$dir" "$name" "saved"
+  step "hyprland overlay -> ${MODE_CONF/#$HOME/\~}"
+
+  # hyprland.conf sources mode-session.conf unconditionally, and on some
+  # Hyprland versions a missing source is a parse error — which on a fresh
+  # install would mean a desktop that does not come up at all. Make sure the
+  # file exists even when no session override has ever been set.
+  [[ -f "$MODE_SESSION_CONF" ]] || mode_write_empty "$MODE_SESSION_CONF"
+
+  mode_write_waybar "$dir" "$name"
+  step "bar layout     -> ${MODE_WAYBAR_OUT/#$HOME/\~}"
+
+  # The mode states which stats variant it wants; monarch-bar-modules owns the
+  # bar's files. A mode that wrote them itself would be a mode that knows what
+  # a bar is, which is the thing golden rule 4 is trying to prevent.
+  local variant=${MODEMETA[bar_variant]:-standard}
+  local bar="$MONARCH_HOME/bin/monarch-bar-modules"
+  if [[ -x "$bar" ]]; then
+    MONARCH_HOME="$MONARCH_HOME" "$bar" "--$variant" >/dev/null 2>&1 \
+      || warn "could not switch the bar to the $variant variant"
+  fi
+
+  settings_write_mode "$name"
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)    usage; exit 0 ;;
+      --no-reload)  RELOAD=false ;;
+      --no-plugins) PLUGINS=false ;;
+      -*) err "unknown option: $1"; exit 1 ;;
+      *)  [[ -z "$NAME" ]] || die "one mode at a time"; NAME=$1 ;;
+    esac
+    shift
+  done
+
+  if [[ -z "$NAME" ]]; then
+    err "which mode?"
+    printf '\nAvailable:\n' >&2
+    mode_names | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  local dir
+  if ! dir=$(mode_path "$NAME"); then
+    err "no mode called '$NAME'"
+    printf '\nAvailable:\n' >&2
+    mode_names | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  mode_load_meta "$dir/meta.toml" || die "'$NAME' has an unreadable meta.toml"
+
+  info "Switching to $NAME mode"
+
+  # ---- requirements, before anything is written ---------------------------
+  #
+  # Order matters here. The overlay is written only after the plugins are
+  # known to be loadable, so a failed switch never leaves a half-applied mode
+  # on disk waiting to be parsed at the next login.
+  if [[ "$PLUGINS" == true ]] && ! mode_ensure_plugins; then
+    local fallback=${MODEMETA[fallback]:-}
+
+    if [[ -z "$fallback" ]]; then
+      die "$NAME needs ${MODE_REQUIRES[*]}, which would not load, and names no fallback"
+    fi
+
+    loud "$NAME mode needs ${MODE_REQUIRES[*]}, which would not load."
+    printf '\n' >&2
+    printf '  hyprbars and friends are hyprpm plugins compiled against ONE\n' >&2
+    printf '  Hyprland version. A Hyprland update breaks them every time.\n' >&2
+    printf '  Try:  hyprpm update && hyprpm reload\n\n' >&2
+    loud "Falling back to $fallback mode so you are not left without window controls."
+    printf '\n' >&2
+
+    local fb_dir
+    fb_dir=$(mode_path "$fallback") || die "the fallback mode '$fallback' does not exist either"
+    mode_load_meta "$fb_dir/meta.toml" || die "'$fallback' has an unreadable meta.toml"
+
+    apply_mode "$fallback" "$fb_dir"
+    [[ "$RELOAD" == true ]] && mode_reload
+    warn "mode is $fallback, not $NAME"
+    exit 1
+  fi
+
+  apply_mode "$NAME" "$dir"
+
+  # A saved mode replaces a session override — asking for a permanent change
+  # and getting last hour's temporary one back at the next reload would be a
+  # genuine surprise.
+  if [[ -s "$MODE_SESSION_STATE" ]]; then
+    mode_write_empty "$MODE_SESSION_CONF"
+    : >"$MODE_SESSION_STATE"
+    step "cleared the session override"
+  fi
+
+  ok "$NAME — ${MODEMETA[description]:-}"
+
+  [[ "$RELOAD" == true ]] && mode_reload
+  exit 0
+}
+
+main "$@"
