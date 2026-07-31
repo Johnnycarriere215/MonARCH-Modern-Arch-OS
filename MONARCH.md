@@ -13,6 +13,22 @@ Read this first, every session. This is the whole context.
 
 **Only read files a task names.** Do not explore the repo to get oriented — this file plus `PROGRESS.md` is all the orientation needed. Unprompted exploration burns the human's usage budget before you write a line.
 
+## Keep chat output short
+
+Tokens are the budget this project runs on. Spend them on code and on
+`PROGRESS.md`, not on chat.
+
+- **Do not summarise what you just wrote.** The code and the Notes in
+  `PROGRESS.md` are the record. A recap in chat is a third copy that nobody reads.
+- Reply in a few lines: what got done, what didn't, anything that needs a
+  decision. No headers, no bullet-point tours of the design, no restating the
+  task back.
+- Explain a design choice **in a comment in the file**, where the next session
+  will actually find it. Not in chat, where it evaporates.
+- Say what failed plainly. Never pad bad news.
+- Long-form writing belongs in `docs/` or in a task's Notes. If it is worth more
+  than a few lines, it is worth a file.
+
 If you think a locked decision below is wrong: **say so and stop.** Do not quietly engineer around it.
 
 ## What this is
@@ -78,7 +94,7 @@ install/      staged install scripts, called by bootstrap.sh
 migrations/   timestamped one-shot upgrade scripts
 gui/          Tauri app
 brand/        ASCII art, Plymouth, greetd theme
-docs/         project documentation
+docs/         project documentation (07-VM-TESTING.md = how to test a build)
 bootstrap.sh  one-command install onto fresh Arch
 
 START-HERE.md  session protocol for AI assistants

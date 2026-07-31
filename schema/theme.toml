@@ -1,0 +1,127 @@
+# MonARCH — theme schema
+#
+# This file is BOTH the documentation of what a theme may contain AND the
+# defaults every theme is merged on top of. `monarch theme apply` loads this
+# first, then overlays themes/<name>/colors.toml, so a theme only has to state
+# what makes it different.
+#
+# The shape — a flat palette plus semantic roles, one colors.toml per theme
+# directory — is inspired by Omarchy's theme system (MIT). No values are
+# copied; the structure is a good idea and the credit is owed. MonARCH's
+# version differs in one important way: apps are not special-cased in code.
+# Every app is one file in themes/_templates/, rendered through the values
+# below.
+#
+# ─────────────────────────────────────────────────────────────────── rules ───
+#
+# Colours are "#rrggbb". The '#' is optional and stripped on load; case is
+# normalised to lower. Short form (#abc) is NOT accepted — being explicit here
+# costs nothing and removes a class of "why is that the wrong colour" bug.
+#
+# A value of "@other.key" is an ALIAS: it resolves to whatever that key ends up
+# being AFTER the theme's own values are merged in. That is what lets the
+# semantic roles below track a theme's palette without every theme restating
+# them. Aliases may chain; a cycle is an error, not a hang.
+#
+# Any key here can be overridden by a theme. Any key a theme adds that is not
+# here is kept and usable in a template — the schema is the floor, not a
+# ceiling — but it will not be validated.
+#
+# ─────────────────────────────────────────────── how templates read these ───
+#
+#   {{ui.accent}}          #7c6df2      the default rendering of a colour
+#   {{ui.accent|raw}}      7c6df2       no '#'
+#   {{ui.accent|rgb}}      rgb(7c6df2)  Hyprland
+#   {{ui.accent|rgba:ee}}  rgba(7c6df2ee)
+#   {{ui.accent|hexa:cc}}  #7c6df2cc    CSS 8-digit
+#   {{ui.accent|css:0.85}} rgba(124, 109, 242, 0.85)
+#   {{meta.name}}          midnight     non-colour values pass through as-is
+#
+# An unknown key or filter in a template is a hard error. A theme that renders
+# half its colours is worse than one that refuses to apply.
+
+# ───────────────────────────────────────────────────────────────────── meta ──
+
+[meta]
+# Must match the directory name. Checked on apply.
+name = ""
+
+author = "unknown"
+
+# Purely informational for humans and, later, the settings GUI. Templates
+# cannot branch on it — they have no logic, deliberately. A light theme is
+# expressed by its colours, not by a flag.
+light = false
+
+description = ""
+
+# The only place an application's name appears in the schema, and it grates.
+# VS Code's uiTheme decides what colour anything MonARCH does not explicitly
+# set comes out — and templates have no logic, so they cannot derive it from
+# `light` above. A light theme sets this to "vs". Everything else leaves it.
+vscode_ui = "vs-dark"
+
+# ─────────────────────────────────────────────────────────────────────── ui ──
+# The desktop surface colours. Every theme must set all nine; there is no
+# sensible default for "what colour is this theme".
+
+[ui]
+bg       = ""   # deepest background — desktop, terminal, lock screen
+bg_alt   = ""   # one step up — bar background, popup background
+surface  = ""   # raised panel, input field, inactive tab
+overlay  = ""   # borders, dividers, selection background
+
+fg       = ""   # primary text
+fg_dim   = ""   # secondary text — timestamps, subtitles
+fg_faint = ""   # disabled text, faint separators
+
+accent     = ""   # the theme's identity: focused border, cursor, active tab
+accent_alt = ""   # the second voice: check state, highlights, warnings-that-are-not-errors
+
+# Derived by default. Override only if a theme needs to break the pattern.
+border_active   = "@ui.accent"
+border_inactive = "@ui.overlay"
+selection_bg    = "@ui.overlay"
+selection_fg    = "@ui.fg"
+cursor          = "@ui.accent"
+
+# ────────────────────────────────────────────────────────────────── semantic ──
+# Meaning, not colour. A module that reports a failing disk asks for sem.urgent
+# and never for term.red, so a theme is free to make "urgent" orange.
+
+[sem]
+urgent  = "@term.red"
+warning = "@term.yellow"
+ok      = "@term.green"
+info    = "@term.blue"
+muted   = "@ui.fg_faint"
+
+# ───────────────────────────────────────────────────────────────── terminal ──
+# The 16 ANSI colours. These are what programs running inside Alacritty see, so
+# they are the most visible part of a theme and the part most worth getting
+# right. Required: all 16.
+
+[term]
+black   = ""
+red     = ""
+green   = ""
+yellow  = ""
+blue    = ""
+magenta = ""
+cyan    = ""
+white   = ""
+
+bright_black   = ""
+bright_red     = ""
+bright_green   = ""
+bright_yellow  = ""
+bright_blue    = ""
+bright_magenta = ""
+bright_cyan    = ""
+bright_white   = ""
+
+# The terminal's own background/foreground. Separate from ui.* so a theme can
+# give the terminal a slightly different black than the desktop, which is a
+# thing people genuinely want.
+bg = "@ui.bg"
+fg = "@ui.fg"

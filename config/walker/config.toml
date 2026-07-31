@@ -1,0 +1,19 @@
+# MonARCH — Walker
+#
+# The one job of this file is to point Walker at the stylesheet the theme
+# engine generates: ~/.config/walker/themes/monarch.css. The theme name is a
+# constant, so `monarch theme apply` only ever rewrites that file's contents.
+#
+# UNVERIFIED. walker-bin has never been installed on a MonARCH machine — the VM
+# test has not been run — and Walker's config layout moved around during its
+# 0.x releases. If the launcher comes up unstyled, or refuses to start, this
+# file and themes/_templates/walker.css are the pair to check, in that order.
+# Deleting this file gets you an unstyled but working launcher.
+
+theme = "monarch"
+
+[search]
+placeholder = "Search"
+
+[activation_mode]
+labels = "asdfghjkl"

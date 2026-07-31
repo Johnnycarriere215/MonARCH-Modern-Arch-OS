@@ -1,0 +1,159 @@
+#!monarch-template
+#!target: ~/.vscode/extensions/monarch-theme/themes/monarch-color-theme.json
+#!
+#! The palette half of the generated VS Code extension. See vscode-package.json
+#! beside this file for why VS Code needs two files where every other app needs
+#! one. Changes here take effect when VS Code is restarted or the window is
+#! reloaded — there is no external way to make it repaint.
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "MonARCH ({{meta.name}})",
+  "colors": {
+    "editor.background": "{{ui.bg}}",
+    "editor.foreground": "{{ui.fg}}",
+    "editorLineNumber.foreground": "{{ui.fg_faint}}",
+    "editorLineNumber.activeForeground": "{{ui.accent}}",
+    "editorCursor.foreground": "{{ui.cursor}}",
+    "editor.selectionBackground": "{{ui.selection_bg}}",
+    "editor.lineHighlightBackground": "{{ui.bg_alt}}",
+    "editorWhitespace.foreground": "{{ui.overlay}}",
+    "editorIndentGuide.background1": "{{ui.overlay}}",
+    "editorIndentGuide.activeBackground1": "{{ui.fg_faint}}",
+
+    "sideBar.background": "{{ui.bg_alt}}",
+    "sideBar.foreground": "{{ui.fg_dim}}",
+    "sideBarTitle.foreground": "{{ui.fg}}",
+    "sideBarSectionHeader.background": "{{ui.surface}}",
+
+    "activityBar.background": "{{ui.bg_alt}}",
+    "activityBar.foreground": "{{ui.fg}}",
+    "activityBar.inactiveForeground": "{{ui.fg_faint}}",
+    "activityBarBadge.background": "{{ui.accent}}",
+    "activityBarBadge.foreground": "{{ui.bg}}",
+
+    "statusBar.background": "{{ui.bg_alt}}",
+    "statusBar.foreground": "{{ui.fg_dim}}",
+    "statusBar.noFolderBackground": "{{ui.bg_alt}}",
+    "statusBar.debuggingBackground": "{{sem.warning}}",
+
+    "titleBar.activeBackground": "{{ui.bg_alt}}",
+    "titleBar.activeForeground": "{{ui.fg}}",
+    "titleBar.inactiveBackground": "{{ui.bg}}",
+    "titleBar.inactiveForeground": "{{ui.fg_faint}}",
+
+    "tab.activeBackground": "{{ui.bg}}",
+    "tab.activeForeground": "{{ui.fg}}",
+    "tab.activeBorderTop": "{{ui.accent}}",
+    "tab.inactiveBackground": "{{ui.bg_alt}}",
+    "tab.inactiveForeground": "{{ui.fg_faint}}",
+    "tab.border": "{{ui.overlay}}",
+
+    "panel.background": "{{ui.bg_alt}}",
+    "panel.border": "{{ui.overlay}}",
+    "terminal.background": "{{term.bg}}",
+    "terminal.foreground": "{{term.fg}}",
+    "terminal.ansiBlack": "{{term.black}}",
+    "terminal.ansiRed": "{{term.red}}",
+    "terminal.ansiGreen": "{{term.green}}",
+    "terminal.ansiYellow": "{{term.yellow}}",
+    "terminal.ansiBlue": "{{term.blue}}",
+    "terminal.ansiMagenta": "{{term.magenta}}",
+    "terminal.ansiCyan": "{{term.cyan}}",
+    "terminal.ansiWhite": "{{term.white}}",
+    "terminal.ansiBrightBlack": "{{term.bright_black}}",
+    "terminal.ansiBrightRed": "{{term.bright_red}}",
+    "terminal.ansiBrightGreen": "{{term.bright_green}}",
+    "terminal.ansiBrightYellow": "{{term.bright_yellow}}",
+    "terminal.ansiBrightBlue": "{{term.bright_blue}}",
+    "terminal.ansiBrightMagenta": "{{term.bright_magenta}}",
+    "terminal.ansiBrightCyan": "{{term.bright_cyan}}",
+    "terminal.ansiBrightWhite": "{{term.bright_white}}",
+
+    "input.background": "{{ui.surface}}",
+    "input.foreground": "{{ui.fg}}",
+    "input.border": "{{ui.overlay}}",
+    "focusBorder": "{{ui.accent}}",
+    "dropdown.background": "{{ui.surface}}",
+    "dropdown.foreground": "{{ui.fg}}",
+    "list.activeSelectionBackground": "{{ui.selection_bg}}",
+    "list.activeSelectionForeground": "{{ui.selection_fg}}",
+    "list.hoverBackground": "{{ui.surface}}",
+    "list.highlightForeground": "{{ui.accent}}",
+
+    "button.background": "{{ui.accent}}",
+    "button.foreground": "{{ui.bg}}",
+    "badge.background": "{{ui.accent}}",
+    "badge.foreground": "{{ui.bg}}",
+    "progressBar.background": "{{ui.accent}}",
+    "scrollbarSlider.background": "{{ui.overlay}}",
+    "scrollbarSlider.hoverBackground": "{{ui.fg_faint}}",
+
+    "widget.border": "{{ui.overlay}}",
+    "editorWidget.background": "{{ui.bg_alt}}",
+    "editorSuggestWidget.selectedBackground": "{{ui.selection_bg}}",
+    "peekViewEditor.background": "{{ui.bg_alt}}",
+
+    "errorForeground": "{{sem.urgent}}",
+    "editorError.foreground": "{{sem.urgent}}",
+    "editorWarning.foreground": "{{sem.warning}}",
+    "editorInfo.foreground": "{{sem.info}}",
+    "gitDecoration.modifiedResourceForeground": "{{sem.warning}}",
+    "gitDecoration.deletedResourceForeground": "{{sem.urgent}}",
+    "gitDecoration.untrackedResourceForeground": "{{sem.ok}}",
+    "gitDecoration.ignoredResourceForeground": "{{ui.fg_faint}}"
+  },
+  "tokenColors": [
+    {
+      "scope": ["comment", "punctuation.definition.comment"],
+      "settings": { "foreground": "{{ui.fg_faint}}", "fontStyle": "italic" }
+    },
+    {
+      "scope": ["string", "string.quoted", "constant.other.symbol"],
+      "settings": { "foreground": "{{term.green}}" }
+    },
+    {
+      "scope": ["constant.numeric", "constant.language", "constant.character"],
+      "settings": { "foreground": "{{ui.accent_alt}}" }
+    },
+    {
+      "scope": ["keyword", "storage.type", "storage.modifier", "keyword.control"],
+      "settings": { "foreground": "{{term.magenta}}" }
+    },
+    {
+      "scope": ["entity.name.function", "support.function", "meta.function-call"],
+      "settings": { "foreground": "{{term.blue}}" }
+    },
+    {
+      "scope": ["entity.name.type", "entity.name.class", "support.type", "support.class"],
+      "settings": { "foreground": "{{term.cyan}}" }
+    },
+    {
+      "scope": ["variable", "variable.other", "meta.definition.variable.name"],
+      "settings": { "foreground": "{{ui.fg}}" }
+    },
+    {
+      "scope": ["variable.parameter", "variable.other.member"],
+      "settings": { "foreground": "{{ui.fg_dim}}" }
+    },
+    {
+      "scope": ["entity.name.tag", "punctuation.definition.tag"],
+      "settings": { "foreground": "{{term.red}}" }
+    },
+    {
+      "scope": ["entity.other.attribute-name"],
+      "settings": { "foreground": "{{ui.accent}}" }
+    },
+    {
+      "scope": ["invalid", "invalid.illegal"],
+      "settings": { "foreground": "{{sem.urgent}}" }
+    },
+    {
+      "scope": ["markup.heading"],
+      "settings": { "foreground": "{{ui.accent}}", "fontStyle": "bold" }
+    },
+    {
+      "scope": ["markup.inline.raw", "markup.fenced_code"],
+      "settings": { "foreground": "{{term.cyan}}" }
+    }
+  ]
+}

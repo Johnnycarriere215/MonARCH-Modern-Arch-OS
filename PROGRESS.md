@@ -9,9 +9,9 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 
 ## Current state
 
-**Phase:** 1 — A bootable desktop
-**Next task:** T3 — Theme engine (Phase 2)
-**Blocked on:** nothing — but **T1 and T2 have never been run on Arch.** The whole of Phase 1 is written and locally verified; the VM test is the outstanding work.
+**Phase:** 2 — The system layer
+**Next task:** T4 — Keybinds
+**Blocked on:** nothing — but **nothing in T1, T2 or T3 has ever been run on Arch.** Three tasks of work are now stacked on a desktop that has never booted. The VM test (Phase 0.4/0.5, procedure in `HANDOFF.md`) is overdue and getting more expensive to defer with every task.
 
 ---
 
@@ -91,18 +91,31 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 ## Phase 2 — The system layer
 
 ### T3 — Theme engine · Opus
-**Status:** TODO
+**Status:** DONE (code complete, locally verified — **awaiting first run on Arch**)
 
 **Done when:**
-- [ ] `schema/theme.toml` documented, with an inline comment crediting Omarchy's schema as the inspiration
-- [ ] `monarch-theme-apply <name>` restyles Hyprland, Hyprlock, Waybar, Alacritty, Mako, Walker, btop, VS Code in one command
-- [ ] Templates live in `themes/_templates/`, one file per app
-- [ ] Adding a new app to the theme system = adding one template file, nothing else
-- [ ] Three themes ship with **original** palettes (not copied from another project)
-- [ ] **No wallpaper files committed** — placeholder README in each `backgrounds/` noting every image needs a recorded license
+- [x] `schema/theme.toml` documented, with an inline comment crediting Omarchy's schema as the inspiration — the file is both the documentation and the defaults every theme merges onto
+- [~] `monarch-theme-apply <name>` restyles Hyprland, Hyprlock, Waybar, Alacritty, Mako, Walker, btop, VS Code in one command — all eight render and write; **Walker and VS Code cannot be confirmed until the VM test**, see notes
+- [x] Templates live in `themes/_templates/`, one file per app — eight templates (VS Code needs two, which is VS Code's shape, not the engine's)
+- [x] Adding a new app to the theme system = adding one template file, nothing else — the target and reload command are declared *in* the template's `#!` header; no registry, no code path names an application
+- [x] Three themes ship with **original** palettes — `midnight` (near-black, violet/brass), `parchment` (warm light, indigo), `harbor` (mid-contrast slate, teal/amber). Written for this project
+- [x] **No wallpaper files committed** — `themes/<name>/backgrounds/README.md` in all three, each with an empty licence table to fill in before any image is committed
 
 **Notes:**
-_(empty)_
+
+- **The theme contract is honoured and extended.** T2's three files (`hypr-colors.conf`, `waybar-colors.css`, `alacritty-colors.toml`) are still the only colours Hyprland/Waybar/Alacritty see, and every `$var` and `@color` those configs reference was checked mechanically against the rendered output. `theme apply` now also writes four more: `mako/config`, `walker/themes/monarch.css`, `btop/themes/monarch.theme`, and a generated VS Code extension under `~/.vscode/extensions/monarch-theme/`. Zero hex outside them — verified by grep over all of `config/`.
+- **The shipped palette files are gone from `config/`.** `config/monarch/theme/*` was three hand-written files that duplicated what the engine now generates, and duplicates drift. `install/30-config.sh` gained `stage_30_apply_theme`, which renders them right after the config deploy. **It is fatal on failure by design** — `hyprland.conf` sources `hypr-colors.conf`, so no palette means no session, and the install should stop where the reason is still on screen. The `monarch/theme/*` entry in `.seed-only` is kept as a guard with a comment saying it matches nothing today.
+- **`migrations/1785505659.sh` ships with this task** (golden rule 5). Almost certainly a permanent no-op — nothing has ever been installed from this repo — but a pre-T3 checkout would have stale hand-written palette files that seed-only protects from being replaced, and this is the explicit trigger. T7's `monarch migrate` will run it.
+- **Mako owns its whole config, and that is not a mistake.** Mako has no include directive — there is no colours-only file to hand it. So `themes/_templates/mako.conf` carries layout keys (width, margin, font) as well as colours. Nothing else in MonARCH writes `mako/config`, so there is nothing to conflict with. Same shape of problem, different answer, for btop and Walker: they get a *named* theme file (`monarch.theme` / `monarch.css`) and a one-line config in `config/` pinning that name, so apply only ever rewrites contents.
+- **Walker theming is unverified and is the likeliest thing here to be wrong.** `walker-bin` has never been installed — the VM test has not been run — and Walker's config layout moved during its 0.x releases. `config/walker/config.toml` assumes `theme = "monarch"` and themes at `~/.config/walker/themes/<name>.css`. Both that file and the template say so in comments. **If the launcher comes up unstyled or refuses to start, delete `config/walker/config.toml` — that gets an unstyled but working launcher.**
+- **VS Code gets a generated extension, not a settings.json edit.** The only other way in is `workbench.colorCustomizations`, which means merging JSON, which means a JSON parser, which golden rule 6 rules out. So `theme apply` writes a minimal real extension always called "MonARCH" whose palette changes underneath it. **Setting `workbench.colorTheme` is left to T8's VS Code installer**, which already has to edit `settings.json`; until then it is one manual pick. `meta.vscode_ui` in the schema is the one place an app name appears there — templates have no logic, so a light theme cannot derive `"vs"` from `light = true`.
+- **Semantic roles are the interface T5 should use.** `sem.urgent/warning/ok/info/muted` are aliases (`@term.red` and so on) resolved after the theme merges, so a theme can make "urgent" orange without touching a module. They land as `$urgent`/`@urgent` in the Hyprland and Waybar palettes. **T5's system-stat modules should reach for those, never for `@red`.**
+- **`hyprpaper` is new in `base.packages`** and in `autostart.conf`. There was no wallpaper daemon at all before this. `~/.config/hypr/hyprpaper.conf` is generated by `monarch background set`, which also swaps the image live over hyprpaper's IPC rather than restarting it. With no wallpaper set — the shipped state — hyprpaper sits running with nothing loaded.
+- **`config/btop/btop.conf` is seed-only** because btop rewrites its own config on exit, filling in every default it did not find. MonARCH ships it only to pin `color_theme = "monarch"`; an update that reset it would throw away everything btop had written since.
+- **Rendering is all-or-nothing.** Every template is rendered into memory before any file is written, and an unknown key or filter aborts the whole apply. A desktop styled by the old theme is recoverable; one styled half by each is not. `theme install` renders every template as part of validation, so a theme that satisfies the schema but breaks a template is caught before it is installed rather than at apply time.
+- **`monarch theme remove` refuses to delete a shipped theme** and tells you to shadow it instead — a user theme of the same name in `~/.config/monarch/themes` wins over the repo's. Deleting one in the repo would just come back on the next update.
+- **T4 should bind these.** `monarch background next` and theme switching have no keybinds; `bindings.conf` is still the seed-only placeholder. Worth a `Super+Shift+W` or similar when the keybind generator lands.
+- **The palettes are mine, not the human's.** The open item "three theme palettes — your own colors" is still open: these are original and defensible, but they are a starting point. Replacing one is editing `themes/<name>/colors.toml` and running `monarch theme apply` — no other file is involved.
 
 ---
 
@@ -118,7 +131,10 @@ _(empty)_
 - [ ] TOML parsed inline in bash — no Python or Rust dependency
 
 **Notes:**
-_(empty)_
+
+- **There is already an inline bash TOML parser.** `toml_load` in `bin/_theme-lib.sh` handles `[section]`, `key = "value"` and bare values, flattening to `section.key` in an associative array. `keybinds.toml` will need arrays-of-tables, which it does not do — but the comment-stripping and quoting rules are worth reusing rather than rediscovering.
+- T3 left `bindings.conf` untouched, so the two notes T2 left for this task both still stand: **the placeholder must be overwritten once** (seed-only means `config apply` will not do it), and `Super+/` is still commented out.
+- Worth binding while you are in there: `monarch background next`, and theme switching.
 
 ---
 
@@ -134,7 +150,8 @@ _(empty)_
 - [ ] Total added idle CPU under 1% on an i7-8665U, with per-module cost noted in comments
 
 **Notes:**
-_(empty)_
+
+- **Use the semantic colours, not the raw ones.** T3's palette gives Waybar `@urgent`, `@warning`, `@ok`, `@info` and `@muted` alongside `@red`/`@yellow`/`@green`. A module reporting a failing disk should ask for `@urgent` so a theme can decide urgent is orange. Also available: `@bg_translucent` and `@surface_translucent`, pre-composited so the stylesheet needs no colour maths.
 
 ---
 
@@ -184,7 +201,8 @@ _(empty)_
 - [ ] `monarch-webapp-add` generates a working `.desktop` entry and icon
 
 **Notes:**
-_(empty)_
+
+- **The VS Code installer owes T3 one line.** T3 generates a colour theme extension at `~/.vscode/extensions/monarch-theme/`, always called "MonARCH", but cannot select it — that needs `"workbench.colorTheme": "MonARCH"` in `settings.json`, and merging JSON needs a parser this layer does not have. This installer already has to edit `settings.json` for gnome-libsecret and auto-update, so it should set the theme in the same pass. Until it does, the editor's theme is one manual pick.
 
 > **Stop here and live in it for a week** before Phase 3. What annoys you that week should reshape the GUI before it's built.
 
@@ -265,6 +283,7 @@ These need the EliteBook, not the VM.
 |---|---|---|
 | T2 | Boot USB — is `GDK_SCALE=1` right on the 1080p panel? | TODO |
 | T2 | Run the full hardware validation checklist in `docs/02-HARDWARE.md` | TODO |
+| T3 | Walker and VS Code actually pick up their generated themes — the two the engine cannot verify itself | TODO |
 | T6 | Windows mode on metal — `hyprbars` is the fragile piece | TODO |
 | T7 | Break an update deliberately, roll back from a snapshot | TODO |
 | T12 | Install from our own ISO in the VM, before touching the internal NVMe | TODO |
@@ -277,7 +296,8 @@ These need the EliteBook, not the VM.
 - [ ] Run `lsblk` with the USB drive **plugged in** (last run showed only the internal NVMe)
 - [ ] Fill in the baseline measurement table in `docs/02-HARDWARE.md`
 - [ ] ASCII crown art → `brand/`
-- [ ] Three theme palettes — your own colors
+- [ ] Three theme palettes — your own colors. **T3 shipped originals as a starting point** (`midnight`, `parchment`, `harbor`); replacing one is editing `themes/<name>/colors.toml` and running `monarch theme apply <name>`, nothing else
+- [ ] Wallpapers, if you want any: drop them in `themes/<name>/backgrounds/` and **fill in the licence table in that directory's README before committing one**
 - [ ] **Never wipe the internal NVMe before Phase 4**
 
 ---
@@ -293,4 +313,5 @@ DATE | TASK | OUTCOME | NOTES FOR NEXT SESSION
 ```
 2026-07-31 | seed + T1 | DONE (unverified on Arch) | Starter tree laid down from monarch-starter(1).zip, LICENSE + .gitignore + version added. bootstrap.sh, 5 install stages, 3 manifests, monarch/-doctor/-version written. Nothing committed — commit and push before testing in the VM, since the raw-URL curl path needs main to exist. Next: T2.
 2026-07-31 | T2 | DONE (unverified on Arch) | Full Hyprland/Waybar/Alacritty config set, settings.toml, monarch-config-apply + startup add/list/remove. Established the theme contract T3 must honour and the config/.seed-only mechanism. Phase 1 is now code-complete — the ONLY thing left is running it on a clean Arch VM (Phase 0.4/0.5 first). Do that before T3; a theme engine on top of an unbooted desktop is building on sand.
+2026-07-31 | T3 | DONE (unverified on Arch) | Theme engine: schema/theme.toml, 8 self-describing templates, theme apply/list/current/install/remove, background set/next, 3 original palettes, hyprpaper added. Palette files no longer shipped in config/ — install stage 30 renders them. Migration 1785505659 ships with it. NOTE: the previous session said do the VM test before T3 and it still has not happened — three tasks now sit on a desktop that has never booted. Walker and VS Code theming are the two pieces that CANNOT be verified without it. Next: T4 (keybinds), or better, the VM.
 ```

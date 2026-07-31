@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+#DESC: Cycle to the next wallpaper for the active theme
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_theme-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Move to the next wallpaper.
+
+Usage:
+  monarch background next [--list]
+
+  --list   show the images it would cycle through, in order
+
+Two directories are searched, in this order:
+
+  <active theme>/backgrounds/          per-theme, changes when the theme does
+  ~/.config/monarch/backgrounds/       yours, follows you across themes
+
+Order is alphabetical and wraps. With one image this is a no-op; with none it
+says so rather than failing.
+EOF
+}
+
+STATE_FILE="$MONARCH_STATE_DIR/background"
+
+candidates() {
+  local dirs=() name dir
+
+  if name=$(settings_theme 2>/dev/null) && dir=$(theme_path "$name" 2>/dev/null); then
+    dirs+=("$dir/backgrounds")
+  fi
+  dirs+=("$MONARCH_CONFIG_DIR/monarch/backgrounds")
+
+  local d
+  for d in "${dirs[@]}"; do
+    [[ -d "$d" ]] || continue
+    find "$d" -maxdepth 1 -type f \
+      \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
+      | sort
+  done
+}
+
+main() {
+  case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    --list)
+      local n=0 f
+      while IFS= read -r f; do printf '  %s\n' "${f/#$HOME/\~}"; n=$((n + 1)); done \
+        < <(candidates)
+      [[ $n -eq 0 ]] && printf '  %s(none)%s\n' "$C_DIM" "$C_RESET"
+      exit 0
+      ;;
+    "") ;;
+    *) err "unknown argument: $1"; exit 1 ;;
+  esac
+
+  local images=() f
+  while IFS= read -r f; do images+=("$f"); done < <(candidates)
+
+  if [[ ${#images[@]} -eq 0 ]]; then
+    warn "no wallpapers to cycle through"
+    printf '\nDrop images into either of these and try again:\n' >&2
+    printf '  <theme>/backgrounds/\n  %s\n' \
+      "${MONARCH_CONFIG_DIR/#$HOME/\~}/monarch/backgrounds/" >&2
+    printf '\nMonARCH ships none: every image needs a recorded licence.\n' >&2
+    exit 1
+  fi
+
+  local current=""
+  [[ -f "$STATE_FILE" ]] && current=$(<"$STATE_FILE")
+
+  # Find where we are and step forward. An unknown current image — the file was
+  # deleted, or the theme changed — starts from the top rather than erroring.
+  local i next=0
+  for i in "${!images[@]}"; do
+    if [[ "${images[$i]}" == "$current" ]]; then
+      next=$(( (i + 1) % ${#images[@]} ))
+      break
+    fi
+  done
+
+  exec "$MONARCH_HOME/bin/monarch-background-set" "${images[$next]}"
+}
+
+main "$@"

@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+#DESC: Restyle the whole desktop from one theme
+
+set -euo pipefail
+
+# Resolve through symlinks — invoked as ~/.local/bin/monarch-theme-apply.
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_theme-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Render a theme into every application MonARCH styles, then reload them.
+
+Usage:
+  monarch theme apply <name> [--dry-run] [--no-reload] [--no-background]
+
+  --dry-run         render everything, write nothing, report what would change
+  --no-reload       write the files but do not poke any running application
+  --no-background   leave the wallpaper alone
+
+What it writes
+
+  One file per template in themes/_templates/, each to the path that template
+  names. Nothing else. Your own config files are never touched — they contain
+  no colours, by design, and read the generated ones instead.
+
+  A theme's backgrounds/ directory, if it holds any images, also sets the
+  wallpaper. Nothing ships with one: every image needs a recorded licence.
+EOF
+}
+
+DRY_RUN=false
+RELOAD=true
+BACKGROUND=true
+NAME=""
+
+# ------------------------------------------------------------------- render ---
+
+# Rendered content, keyed by destination. Everything is rendered before
+# anything is written, so a template that fails halfway leaves a desktop
+# styled by the old theme rather than half by each.
+declare -A RENDERED=()
+RELOAD_CMDS=()
+
+render_all() {
+  local template target rendered cmd
+  local count=0
+
+  [[ -d "$MONARCH_TEMPLATE_DIR" ]] || die "no templates in $MONARCH_TEMPLATE_DIR"
+
+  for template in "$MONARCH_TEMPLATE_DIR"/*; do
+    [[ -f "$template" ]] || continue
+    [[ "$(basename "$template")" == README.md ]] && continue
+
+    head -n1 "$template" | grep -q '^#!monarch-template' || {
+      warn "$(basename "$template") has no '#!monarch-template' header — skipped"
+      continue
+    }
+
+    target=$(template_meta "$template" target)
+    [[ -n "$target" ]] || die "$(basename "$template") declares no '#!target:'"
+    target=$(template_target "$target")
+
+    if [[ -n "${RENDERED[$target]+x}" ]]; then
+      die "two templates both write $target"
+    fi
+
+    rendered=$(template_render "$template") || die "could not render $(basename "$template")"
+    RENDERED["$target"]=$rendered
+    count=$((count + 1))
+
+    while IFS= read -r cmd; do
+      [[ -n "$cmd" ]] && RELOAD_CMDS+=("$cmd")
+    done < <(template_meta "$template" reload)
+  done
+
+  [[ $count -gt 0 ]] || die "no usable templates in $MONARCH_TEMPLATE_DIR"
+  step "rendered $count template(s)"
+}
+
+write_all() {
+  local target n_written=0 n_same=0
+
+  for target in "${!RENDERED[@]}"; do
+    if [[ -f "$target" ]] && [[ "$(<"$target")" == "${RENDERED[$target]}" ]]; then
+      n_same=$((n_same + 1))
+      continue
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+      step "would write ${target/#$HOME/\~}"
+    else
+      mkdir -p "$(dirname "$target")"
+      # Write to a temp file in the same directory and move it into place, so
+      # an application reading the file mid-write never sees half a palette.
+      local tmp="$target.monarch-tmp"
+      printf '%s\n' "${RENDERED[$target]}" >"$tmp"
+      chmod 0644 "$tmp"
+      mv -f "$tmp" "$target"
+      step "wrote   ${target/#$HOME/\~}"
+    fi
+
+    n_written=$((n_written + 1))
+  done
+
+  if [[ "$DRY_RUN" == true ]]; then
+    ok "$n_written would change · $n_same already current"
+  else
+    ok "$n_written written · $n_same already current"
+  fi
+}
+
+run_reloads() {
+  local cmd seen=" "
+
+  for cmd in "${RELOAD_CMDS[@]}"; do
+    [[ "$seen" == *" $cmd "* ]] && continue
+    seen+="$cmd "
+
+    # An app that is not installed, or not running, is not a failure — the
+    # files are on disk and it will pick them up when it starts.
+    have "${cmd%% *}" || continue
+
+    if eval "$cmd" >/dev/null 2>&1; then
+      step "reloaded '$cmd'"
+    else
+      # Almost always "the app is not running", which is not worth a warning.
+      # Naming the whole command matters: 'pkill -SIGUSR2 waybar' failing is
+      # about waybar, not about pkill.
+      step "${C_DIM}nothing to reload: '$cmd'${C_RESET}"
+    fi
+  done
+}
+
+# --------------------------------------------------------------- background ---
+
+apply_background() {
+  local dir=$1 image
+
+  image=$(find "$dir/backgrounds" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
+    2>/dev/null | sort | head -n1)
+
+  if [[ -z "$image" ]]; then
+    # Expected, not a problem: MonARCH ships no wallpapers. Whatever is
+    # currently set stays set.
+    return 0
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    step "would set background to ${image/#$HOME/\~}"
+    return 0
+  fi
+
+  "$MONARCH_HOME/bin/monarch-background-set" "$image" || \
+    warn "could not set the background — the theme is applied regardless"
+}
+
+# --------------------------------------------------------------------- main ---
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)       usage; exit 0 ;;
+      --dry-run)       DRY_RUN=true ;;
+      --no-reload)     RELOAD=false ;;
+      --no-background) BACKGROUND=false ;;
+      -*)              err "unknown option: $1"; printf '\n'; usage >&2; exit 1 ;;
+      *)
+        [[ -z "$NAME" ]] || { err "one theme at a time (got '$NAME' and '$1')"; exit 1; }
+        NAME=$1
+        ;;
+    esac
+    shift
+  done
+
+  if [[ -z "$NAME" ]]; then
+    err "which theme?"
+    printf '\nAvailable:\n' >&2
+    theme_names | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  local dir
+  if ! dir=$(theme_path "$NAME"); then
+    err "no theme called '$NAME'"
+    printf '\nAvailable:\n' >&2
+    theme_names | sed 's/^/  /' >&2
+    printf "\nInstall one with: monarch theme install <dir|git-url>\n" >&2
+    exit 1
+  fi
+
+  [[ "$DRY_RUN" == true ]] && info "Dry run — nothing will be written"
+  info "Applying theme: $NAME"
+
+  theme_load "$dir" "$NAME" || die "'$NAME' is not a valid theme"
+  render_all
+  write_all
+
+  if [[ "$DRY_RUN" == false ]]; then
+    # Recorded last: settings.toml claiming a theme that failed to render
+    # would be a lie the next boot acts on.
+    settings_set theme "$NAME"
+  fi
+
+  [[ "$BACKGROUND" == true ]] && apply_background "$dir"
+
+  if [[ "$RELOAD" == true && "$DRY_RUN" == false ]]; then
+    run_reloads
+  fi
+
+  # VS Code has no reload hook. Say so once rather than leaving someone to
+  # wonder why the editor alone did not change.
+  if [[ "$DRY_RUN" == false ]] && have code; then
+    step "${C_DIM}VS Code needs a window reload to repaint${C_RESET}"
+  fi
+}
+
+main "$@"

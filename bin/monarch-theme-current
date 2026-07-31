@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#DESC: Print the active theme
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_theme-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Print the active theme's name.
+
+Usage:
+  monarch theme current [--verbose]
+
+  --verbose   also print where it lives and every colour it resolves to
+
+The name comes from settings.toml, which is the source of truth. The rendered
+files under ~/.config/monarch/theme are output, and are not consulted.
+EOF
+}
+
+VERBOSE=false
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)    usage; exit 0 ;;
+      -v|--verbose) VERBOSE=true ;;
+      *) err "unknown argument: $1"; exit 1 ;;
+    esac
+    shift
+  done
+
+  local name
+  name=$(settings_theme) || die "settings.toml does not name a theme"
+
+  if [[ "$VERBOSE" == false ]]; then
+    printf '%s\n' "$name"
+    exit 0
+  fi
+
+  local dir
+  dir=$(theme_path "$name") || die "settings.toml says '$name', which is not installed"
+
+  printf '%s%s%s\n' "$C_BOLD" "$name" "$C_RESET"
+  printf '  %spath%s      %s\n' "$C_DIM" "$C_RESET" "${dir/#$HOME/\~}"
+
+  theme_load "$dir" "$name" >/dev/null || die "'$name' is installed but not valid"
+
+  printf '  %sauthor%s    %s\n' "$C_DIM" "$C_RESET" "${THEME[meta.author]}"
+  printf '  %slight%s     %s\n\n' "$C_DIM" "$C_RESET" "${THEME[meta.light]}"
+
+  local key
+  while IFS= read -r key; do
+    printf '  %-22s %s\n' "$key" "$(theme_value "$key")"
+  done < <(printf '%s\n' "${!THEME[@]}" | sort)
+}
+
+main "$@"

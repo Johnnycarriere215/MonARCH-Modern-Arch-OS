@@ -1,0 +1,46 @@
+# midnight — MonARCH's default
+#
+# Near-black, cool, with a violet accent and a brass second voice. Written for
+# this project; not derived from another theme. The greys are deliberately blue
+# rather than neutral, so a white terminal foreground reads as warm against
+# them without actually being warm.
+#
+# Fields and filters: schema/theme.toml.
+
+[meta]
+name = "midnight"
+author = "MonARCH"
+light = false
+description = "Near-black with violet and brass. The default."
+
+[ui]
+bg       = "#0d0f14"
+bg_alt   = "#151922"
+surface  = "#1c2130"
+overlay  = "#262d3f"
+
+fg       = "#d6dae4"
+fg_dim   = "#8b93a7"
+fg_faint = "#5b6377"
+
+accent     = "#7c6df2"
+accent_alt = "#c9a227"
+
+[term]
+black   = "#1c2130"
+red     = "#e05252"
+green   = "#4fb477"
+yellow  = "#d9a441"
+blue    = "#4f8ff7"
+magenta = "#a978e8"
+cyan    = "#45b8bd"
+white   = "#d6dae4"
+
+bright_black   = "#5b6377"
+bright_red     = "#f07070"
+bright_green   = "#6fce95"
+bright_yellow  = "#e8bd63"
+bright_blue    = "#71a6ff"
+bright_magenta = "#c095f5"
+bright_cyan    = "#66d0d5"
+bright_white   = "#f2f4f8"

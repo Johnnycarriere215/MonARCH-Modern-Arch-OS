@@ -10,6 +10,7 @@
 hyprland
 hyprlock                      # screen lock
 hypridle                      # idle daemon that drives hyprlock
+hyprpaper                     # wallpaper. monarch background set|next drives it over IPC
 mako                          # notifications
 waybar
 xdg-desktop-portal-hyprland   # screenshare, file pickers

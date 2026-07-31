@@ -1,0 +1,46 @@
+# harbor — the mid-contrast dark one
+#
+# Between midnight and parchment. A slate-blue background rather than black,
+# which is easier on the eyes over a long session and hides the OLED-black
+# banding a cheap panel shows on large dark surfaces. Teal accent, amber
+# second voice — cold and warm, so state colours never read as decoration.
+#
+# Fields and filters: schema/theme.toml.
+
+[meta]
+name = "harbor"
+author = "MonARCH"
+light = false
+description = "Slate blue with teal and amber. Softer than midnight."
+
+[ui]
+bg       = "#1a2430"
+bg_alt   = "#212d3a"
+surface  = "#2a3846"
+overlay  = "#374857"
+
+fg       = "#cdd9e3"
+fg_dim   = "#9aa9b8"
+fg_faint = "#6c7d8d"
+
+accent     = "#3fb9a6"
+accent_alt = "#e8a44c"
+
+[term]
+black   = "#2a3846"
+red     = "#e2686a"
+green   = "#5fc08a"
+yellow  = "#e0b04a"
+blue    = "#5aa0e8"
+magenta = "#b98ae0"
+cyan    = "#3fb9a6"
+white   = "#cdd9e3"
+
+bright_black   = "#6c7d8d"
+bright_red     = "#f08688"
+bright_green   = "#7ed6a6"
+bright_yellow  = "#f0c76a"
+bright_blue    = "#7cb8f2"
+bright_magenta = "#cfa6ef"
+bright_cyan    = "#63d3c0"
+bright_white   = "#e8f1f7"

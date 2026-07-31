@@ -26,6 +26,36 @@ stage_30_deploy_configs() {
     || die "config deploy failed"
 }
 
+stage_30_apply_theme() {
+  # The colour files under ~/.config/monarch/theme are GENERATED, and since T3
+  # they are generated here rather than shipped in config/. There is exactly
+  # one producer of a palette — themes/_templates — and no checked-in copy to
+  # drift away from it.
+  #
+  # Fatal on failure, deliberately: config/hypr/hyprland.conf sources
+  # hypr-colors.conf, so a session with no palette is a session that does not
+  # start. Better to stop the install where the reason is still on screen.
+  local apply="$MONARCH_HOME/bin/monarch-theme-apply"
+  local settings="${XDG_CONFIG_HOME:-$HOME/.config}/monarch/settings.toml"
+
+  [[ -x "$apply" ]] || die "missing $apply — cannot render the theme"
+
+  # settings.toml was just seeded by the deploy above, so this normally reads
+  # the shipped default. On a re-run it reads whatever the user has chosen,
+  # which is the point: an update must not silently reset the theme.
+  local theme="midnight"
+  if [[ -f "$settings" ]]; then
+    theme=$(sed -n 's/^[[:space:]]*theme[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+      "$settings" | head -n1)
+    [[ -n "$theme" ]] || theme="midnight"
+  fi
+
+  # --no-reload: nothing is running yet on a first install, and on a re-run
+  # hyprctl would be poking the session the installer is sitting inside.
+  MONARCH_HOME="$MONARCH_HOME" "$apply" "$theme" --no-reload \
+    || die "could not render theme '$theme'"
+}
+
 stage_30_link_cli() {
   local bindir="$HOME/.local/bin"
   info "Linking the monarch CLI into $bindir"
@@ -66,6 +96,9 @@ stage_30_state_dirs() {
 stage_30_config() {
   stage_30_state_dirs
   stage_30_deploy_configs
+  # After the deploy: settings.toml has to exist before we can read a theme
+  # name out of it.
+  stage_30_apply_theme
   stage_30_link_cli
   stage_30_path
 }

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+#DESC: List every theme available, marking the active one
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_theme-lib.sh"
+
+usage() {
+  cat <<'EOF'
+List installed themes.
+
+Usage:
+  monarch theme list [--names]
+
+  --names   one name per line, nothing else — for scripts and the GUI
+
+Themes you install live in ~/.config/monarch/themes and shadow a shipped theme
+of the same name, so a theme MonARCH ships can be fixed without editing the
+repository.
+EOF
+}
+
+NAMES_ONLY=false
+
+# Read one scalar out of a colors.toml without loading the whole theme — this
+# runs once per theme and none of it needs to be valid to be listed.
+peek() {
+  sed -n "s/^[[:space:]]*$2[[:space:]]*=[[:space:]]*\"\([^\"]*\)\".*/\1/p" \
+    "$1/colors.toml" | head -n1
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --names)   NAMES_ONLY=true ;;
+      *) err "unknown argument: $1"; exit 1 ;;
+    esac
+    shift
+  done
+
+  if [[ "$NAMES_ONLY" == true ]]; then
+    theme_names
+    exit 0
+  fi
+
+  local active=""
+  active=$(settings_theme 2>/dev/null || true)
+
+  local name dir origin marker desc found=false
+  while IFS= read -r name; do
+    found=true
+    dir=$(theme_path "$name")
+
+    if theme_is_shipped "$name" && [[ "$dir" == "$MONARCH_HOME"/* ]]; then
+      origin="shipped"
+    elif theme_is_shipped "$name"; then
+      origin="shadowing"   # yours, and it hides the shipped theme of this name
+    else
+      origin="yours"
+    fi
+
+    if [[ "$name" == "$active" ]]; then
+      marker="${C_GREEN}*${C_RESET}"
+    else
+      marker=" "
+    fi
+
+    desc=$(peek "$dir" description)
+    [[ -n "$desc" ]] || desc=$(peek "$dir" author)
+
+    printf ' %b %-14s %s%-11s%s %s%s%s\n' \
+      "$marker" "$name" "$C_DIM" "$origin" "$C_RESET" "$C_DIM" "$desc" "$C_RESET"
+  done < <(theme_names)
+
+  if [[ "$found" == false ]]; then
+    warn "no themes found"
+    exit 1
+  fi
+
+  printf '\n%sApply one with: monarch theme apply <name>%s\n' "$C_DIM" "$C_RESET"
+}
+
+main "$@"

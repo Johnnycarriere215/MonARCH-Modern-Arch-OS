@@ -1,0 +1,58 @@
+# parchment — the light one
+#
+# Warm paper rather than white: a screen at full white next to a dark room is
+# the reason most people bounce off light themes. Everything is desaturated
+# toward yellow, and the accent is a deep indigo so it stays legible at small
+# sizes on a background this bright.
+#
+# The ANSI colours are darker than their dark-theme counterparts on purpose —
+# a light terminal needs its greens and yellows pulled down or they vanish.
+#
+# Fields and filters: schema/theme.toml.
+
+[meta]
+name = "parchment"
+author = "MonARCH"
+light = true
+description = "Warm paper, deep indigo accent. Readable in daylight."
+
+# Without this VS Code fills anything MonARCH does not set with dark values,
+# and the editor comes out half-light. See the note in schema/theme.toml.
+vscode_ui = "vs"
+
+[ui]
+bg       = "#f4f1ea"
+bg_alt   = "#eae5da"
+surface  = "#e0d9c9"
+overlay  = "#cfc6b2"
+
+fg       = "#2e2a24"
+fg_dim   = "#5f584c"
+fg_faint = "#8a8172"
+
+accent     = "#4436b8"
+accent_alt = "#9a6b12"
+
+# On a light background the default selection (ui.overlay) is too close to the
+# surface to see. Push it toward the accent instead.
+selection_bg = "#d5cfe8"
+selection_fg = "#2e2a24"
+
+[term]
+black   = "#2e2a24"
+red     = "#b03030"
+green   = "#3f7a45"
+yellow  = "#8a6316"
+blue    = "#2f5fbf"
+magenta = "#7a3fb0"
+cyan    = "#1f7a80"
+white   = "#e0d9c9"
+
+bright_black   = "#8a8172"
+bright_red     = "#c94f4f"
+bright_green   = "#4f9a58"
+bright_yellow  = "#ad8324"
+bright_blue    = "#4a7fd6"
+bright_magenta = "#9a5fcd"
+bright_cyan    = "#2f9aa0"
+bright_white   = "#f4f1ea"

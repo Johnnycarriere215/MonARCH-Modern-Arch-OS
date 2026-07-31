@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+#DESC: Install a theme from a directory or a git URL
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_theme-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Install a theme into ~/.config/monarch/themes.
+
+Usage:
+  monarch theme install <directory>
+  monarch theme install <git-url> [--name <name>] [--force]
+  monarch theme install --apply <source>
+
+  --name    override the name (default: the directory or repository name)
+  --force   replace a theme of the same name that is already installed
+  --apply   apply it once it is installed
+
+A theme is a directory containing colors.toml, optionally with backgrounds/.
+It is validated against schema/theme.toml BEFORE anything is installed, so a
+broken theme cannot land half-installed and cannot be applied by accident.
+
+Installing a name that MonARCH also ships shadows the shipped one. That is
+supported: it is how you fix a theme without editing the repository.
+EOF
+}
+
+SOURCE=""
+NAME=""
+FORCE=false
+APPLY=false
+
+cleanup() { [[ -n "${TMPDIR_CLONE:-}" ]] && rm -rf "$TMPDIR_CLONE"; }
+trap cleanup EXIT
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --name)    NAME=${2:-}; [[ -n "$NAME" ]] || die "--name needs a value"; shift ;;
+      --force)   FORCE=true ;;
+      --apply)   APPLY=true ;;
+      -*)        err "unknown option: $1"; exit 1 ;;
+      *)
+        [[ -z "$SOURCE" ]] || die "one source at a time"
+        SOURCE=$1
+        ;;
+    esac
+    shift
+  done
+
+  [[ -n "$SOURCE" ]] || { err "nothing to install"; printf '\n'; usage >&2; exit 1; }
+
+  # ---- get it onto disk ----------------------------------------------------
+  local src_dir
+  if [[ -d "$SOURCE" ]]; then
+    src_dir=$(cd -P "$SOURCE" && pwd)
+  elif [[ "$SOURCE" == *://* || "$SOURCE" == git@* || "$SOURCE" == *.git ]]; then
+    have git || die "git is not installed"
+    TMPDIR_CLONE=$(mktemp -d)
+    info "Cloning $SOURCE"
+    git clone --depth 1 --quiet "$SOURCE" "$TMPDIR_CLONE/theme" \
+      || die "clone failed"
+    src_dir="$TMPDIR_CLONE/theme"
+    [[ -z "$NAME" ]] && {
+      NAME=$(basename "$SOURCE" .git)
+      # A repo called monarch-theme-foo installs as 'foo'.
+      NAME=${NAME#monarch-theme-}
+      NAME=${NAME%-theme}
+    }
+  else
+    die "'$SOURCE' is neither a directory nor a git URL"
+  fi
+
+  [[ -f "$src_dir/colors.toml" ]] || die "$SOURCE has no colors.toml — not a theme"
+
+  [[ -z "$NAME" ]] && NAME=$(basename "$src_dir")
+  [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || \
+    die "'$NAME' is not a usable theme name (lower case, digits, - and _)"
+  [[ "$NAME" == _* ]] && die "names starting with _ are reserved (_templates)"
+
+  # ---- validate before installing -----------------------------------------
+  step "validating"
+  theme_load "$src_dir" "$NAME" >/dev/null || die "'$NAME' is not a valid theme — nothing installed"
+
+  # Rendering is the real test: a theme can satisfy the schema and still use a
+  # key a template does not have. Cheaper to find out now than at apply time.
+  local template
+  for template in "$MONARCH_TEMPLATE_DIR"/*; do
+    [[ -f "$template" ]] || continue
+    head -n1 "$template" | grep -q '^#!monarch-template' || continue
+    template_render "$template" >/dev/null || die "'$NAME' does not render — nothing installed"
+  done
+  ok "valid"
+
+  # ---- install -------------------------------------------------------------
+  local dest="$MONARCH_CONFIG_DIR/monarch/themes/$NAME"
+
+  if [[ -e "$dest" ]]; then
+    [[ "$FORCE" == true ]] || die "$NAME is already installed — pass --force to replace it"
+    rm -rf "$dest"
+  fi
+
+  mkdir -p "$(dirname "$dest")"
+  cp -a "$src_dir" "$dest"
+  # A cloned theme carries its git history; the user's config directory is not
+  # the place for it.
+  rm -rf "$dest/.git"
+
+  ok "installed $NAME -> ${dest/#$HOME/\~}"
+
+  if theme_is_shipped "$NAME"; then
+    loud "this shadows the theme MonARCH ships under the same name"
+  fi
+
+  if [[ "$APPLY" == true ]]; then
+    exec "$MONARCH_HOME/bin/monarch-theme-apply" "$NAME"
+  fi
+
+  printf '\n%sApply it with: monarch theme apply %s%s\n' "$C_DIM" "$NAME" "$C_RESET"
+}
+
+main "$@"

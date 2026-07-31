@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+#DESC: Remove a theme you installed
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_theme-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Remove a theme from ~/.config/monarch/themes.
+
+Usage:
+  monarch theme remove <name> [--yes]
+
+  --yes   do not ask
+
+Only themes you installed can be removed. Themes MonARCH ships live in the
+repository; deleting one there would come straight back on the next update, so
+this refuses rather than pretending to work.
+
+Removing a theme that shadows a shipped one restores the shipped version.
+EOF
+}
+
+NAME=""
+ASSUME_YES=false
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -y|--yes)  ASSUME_YES=true ;;
+      -*)        err "unknown option: $1"; exit 1 ;;
+      *)
+        [[ -z "$NAME" ]] || die "one theme at a time"
+        NAME=$1
+        ;;
+    esac
+    shift
+  done
+
+  [[ -n "$NAME" ]] || { err "which theme?"; printf '\n'; usage >&2; exit 1; }
+
+  local user_dir="$MONARCH_CONFIG_DIR/monarch/themes/$NAME"
+
+  if [[ ! -d "$user_dir" ]]; then
+    if theme_is_shipped "$NAME"; then
+      err "'$NAME' is a theme MonARCH ships — it is not yours to remove"
+      printf "\nAn update would reinstall it. To change it, install your own\n" >&2
+      printf "version of the same name; it shadows ours:\n\n" >&2
+      printf "  cp -r %s/themes/%s ./%s\n" "${MONARCH_HOME/#$HOME/\~}" "$NAME" "$NAME" >&2
+      printf "  \$EDITOR ./%s/colors.toml\n" "$NAME" >&2
+      printf "  monarch theme install ./%s\n" "$NAME" >&2
+      exit 1
+    fi
+    die "'$NAME' is not installed"
+  fi
+
+  # Removing the theme that is currently applied leaves the desktop styled by
+  # files it can no longer regenerate. Say so before, not after.
+  local active shadowed=false
+  active=$(settings_theme 2>/dev/null || true)
+  theme_is_shipped "$NAME" && shadowed=true
+
+  if [[ "$NAME" == "$active" ]]; then
+    if [[ "$shadowed" == true ]]; then
+      warn "'$NAME' is the active theme — the version MonARCH ships takes over"
+    else
+      warn "'$NAME' is the active theme — the desktop keeps its current colours,"
+      warn "but nothing can regenerate them. Apply another theme afterwards."
+    fi
+  fi
+
+  if [[ "$ASSUME_YES" == false ]]; then
+    printf 'Remove %s? [y/N] ' "${user_dir/#$HOME/\~}"
+    local reply; read -r reply
+    [[ "$reply" =~ ^[Yy] ]] || { info "left alone"; exit 0; }
+  fi
+
+  rm -rf "$user_dir"
+  ok "removed $NAME"
+
+  if [[ "$NAME" == "$active" && "$shadowed" == true ]]; then
+    info "Re-applying the shipped '$NAME'"
+    exec "$MONARCH_HOME/bin/monarch-theme-apply" "$NAME"
+  fi
+}
+
+main "$@"
