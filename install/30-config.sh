@@ -13,26 +13,17 @@
 source "$MONARCH_HOME/install/_common.sh"
 
 stage_30_deploy_configs() {
-  local src="$MONARCH_HOME/config"
-  local dst="${XDG_CONFIG_HOME:-$HOME/.config}"
+  # Golden rule 1: the monarch CLI is the only thing that writes config. The
+  # installer is not an exception — it shells out like everything else, so the
+  # first deploy and every later `monarch config apply` take the identical path
+  # and there is only one set of behaviour to get right.
+  local apply="$MONARCH_HOME/bin/monarch-config-apply"
 
-  [[ -d "$src" ]] || { warn "no config/ directory in $MONARCH_HOME — skipping"; return 0; }
+  [[ -x "$apply" ]] || die "missing $apply — cannot deploy configuration"
 
-  info "Deploying configs to $dst"
-  mkdir -p "$dst"
-
-  local count=0 file rel
-  while IFS= read -r file; do
-    rel=${file#"$src"/}
-    deploy_user_file "$file" "$dst/$rel"
-    count=$((count + 1))
-  done < <(find "$src" -type f ! -name '.gitkeep' | sort)
-
-  if [[ $count -eq 0 ]]; then
-    ok "no config files to deploy yet (T2 adds them)"
-  else
-    ok "$count config files deployed"
-  fi
+  info "Deploying configs"
+  MONARCH_HOME="$MONARCH_HOME" "$apply" --quiet \
+    || die "config deploy failed"
 }
 
 stage_30_link_cli() {

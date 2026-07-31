@@ -10,8 +10,8 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 ## Current state
 
 **Phase:** 1 — A bootable desktop
-**Next task:** T2 — Base config set
-**Blocked on:** nothing (T1 is written and locally verified, but **not yet run on Arch** — see T1 Notes)
+**Next task:** T3 — Theme engine (Phase 2)
+**Blocked on:** nothing — but **T1 and T2 have never been run on Arch.** The whole of Phase 1 is written and locally verified; the VM test is the outstanding work.
 
 ---
 
@@ -60,19 +60,29 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 ---
 
 ### T2 — Base config set · Sonnet
-**Status:** TODO
+**Status:** DONE (code complete, locally verified — **the VM test has not been run**)
 
 **Done when:**
-- [ ] `config/hypr/hyprland.conf` sources monitors, input, looknfeel, windows, autostart, bindings, monarch
-- [ ] `GDK_SCALE=1` set (target panel is 1080p, not retina)
-- [ ] 5 workspaces configured; a 6th is created dynamically
-- [ ] Dropdown terminal on a native special workspace — **not** pyprland
-- [ ] Waybar and Alacritty configs exist, no hardcoded colors anywhere
-- [ ] `bin/monarch-config-apply` is idempotent and backs up user-modified files to `.bak` rather than overwriting
-- [ ] **The VM boots to a Hyprland desktop, logs in, and opens a terminal**
+- [x] `config/hypr/hyprland.conf` sources monitors, input, looknfeel, windows, autostart, bindings, monarch — all 7, plus the theme colours first; every sourced path verified to exist
+- [x] `GDK_SCALE=1` set (target panel is 1080p, not retina) — `config/hypr/monarch.conf`
+- [x] 5 workspaces configured; a 6th is created dynamically — 1–5 `persistent:true`, 6 deliberately not, so Hyprland destroys it with its last window
+- [x] Dropdown terminal on a native special workspace — **not** pyprland — `workspace = special:dropdown, on-created-empty:...`
+- [x] Waybar and Alacritty configs exist, no hardcoded colors anywhere — checked mechanically: zero hex outside `config/monarch/theme/`, and every `$var` / `@color` referenced resolves to a definition
+- [x] `bin/monarch-config-apply` is idempotent and backs up user-modified files to `.bak` rather than overwriting — all four cases exercised against a fake `HOME`
+- [ ] **The VM boots to a Hyprland desktop, logs in, and opens a terminal** — **NOT VERIFIED.** Needs Phase 0.4/0.5. This is the one that counts.
 
 **Notes:**
-_(empty)_
+
+- **The theme contract, which T3 must honour.** Configs carry no colours. Three generated files under `~/.config/monarch/theme/` hold the palette — `hypr-colors.conf` (`$bg`, `$accent`, …), `waybar-colors.css` (`@define-color`), `alacritty-colors.toml`. `monarch theme apply` rewrites those three and nothing else. The checked-in defaults are the original "midnight" palette; T3 replaces them with real themes.
+- **`config/.seed-only` is new.** Paths listed there are installed once and never touched again — your settings, your monitor layout, and anything another command generates. Without it, `monarch config apply` on update would undo `monarch theme apply`. **T3 and T4 must add nothing to `config/` that they also generate without listing it here.**
+- **Autostart is split in two.** `autostart.conf` = essentials, stays MonARCH's, keeps receiving updates. `autostart-user.conf` = your apps, seed-only, holds the `>>> monarch startup apps >>>` managed block. They were one file until it became clear that mixing them means one `monarch startup add` freezes the essentials forever.
+- **`bindings.conf` is a hand-written placeholder** and is marked seed-only. T4 replaces it from `schema/keybinds.toml`. **T4 must stamp the generated file and will need to overwrite the placeholder once** — a plain `config apply` will not do it, since seed-only means "never overwrite".
+- **`Super+/` for the keybind list is commented out** in `bindings.conf`. T4 uncomments it once `monarch keys list` exists; binding a key to a missing command now would give a key that silently does nothing.
+- **Two files beyond the spec:** `hypridle.conf` and `hyprlock.conf`. `autostart.conf` launches hypridle, and hypridle with no config exits immediately; hyprlock with no config locks to a black screen with no password field, which is indistinguishable from a hang.
+- **Pango markup cannot use theme colours.** The Waybar calendar and the hyprlock placeholder text are styled with weight/underline only. Any hex there would be a colour the theme engine could never reach.
+- **Alacritty's `import` moved under `[general]` in 0.14.** If a future Arch downgrade lands on 0.13, colours silently fall back to defaults — that is the first thing to check.
+- `install/30-config.sh` now shells out to `monarch-config-apply` rather than deploying itself, so the installer and a later update take the identical path (golden rule 1). `deploy_user_file` in `install/_common.sh` was removed as dead code.
+- **`bin/_lib.sh` and `bin/_startup-lib.sh` are shared libraries, not commands** — the leading underscore keeps them out of the dispatcher's scan and out of the `~/.local/bin` symlinks. The three T1 scripts still carry their own copy of the symlink-resolve preamble and should adopt `_lib.sh` in a later pass.
 
 > **T1 + T2 = the milestone that matters.** `curl … | bash` on a clean Arch VM produces a working desktop. Verify on real hardware next (USB boot, check `GDK_SCALE`) before moving on.
 
@@ -282,4 +292,5 @@ DATE | TASK | OUTCOME | NOTES FOR NEXT SESSION
 
 ```
 2026-07-31 | seed + T1 | DONE (unverified on Arch) | Starter tree laid down from monarch-starter(1).zip, LICENSE + .gitignore + version added. bootstrap.sh, 5 install stages, 3 manifests, monarch/-doctor/-version written. Nothing committed — commit and push before testing in the VM, since the raw-URL curl path needs main to exist. Next: T2.
+2026-07-31 | T2 | DONE (unverified on Arch) | Full Hyprland/Waybar/Alacritty config set, settings.toml, monarch-config-apply + startup add/list/remove. Established the theme contract T3 must honour and the config/.seed-only mechanism. Phase 1 is now code-complete — the ONLY thing left is running it on a clean Arch VM (Phase 0.4/0.5 first). Do that before T3; a theme engine on top of an unbooted desktop is building on sand.
 ```

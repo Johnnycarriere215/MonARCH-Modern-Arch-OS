@@ -1,0 +1,160 @@
+/* MonARCH — Waybar stylesheet
+ *
+ * Every colour below is a @define-color name from the theme file imported on
+ * the next line. There is not one hex value in here, and there should never
+ * be — `monarch theme apply` rewrites the import target, not this file.
+ */
+
+@import url("../monarch/theme/waybar-colors.css");
+
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  font-weight: 500;
+  /* GTK draws a 1px halo on every widget without this. */
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+window#waybar {
+  background: transparent;
+  color: @fg;
+}
+
+/* The bar itself is a floating slab rather than a full-width strip — it lines
+ * up with the window gaps set in looknfeel.conf. */
+.modules-left,
+.modules-center,
+.modules-right {
+  background-color: @bg_alt;
+  border: 1px solid @overlay;
+  border-radius: 10px;
+  margin: 5px 0;
+  padding: 0 4px;
+}
+
+.modules-left  { margin-left: 8px; }
+.modules-right { margin-right: 8px; }
+
+/* ───────────────────────────────────────────────────────── workspaces ─── */
+
+#workspaces {
+  padding: 0 2px;
+}
+
+#workspaces button {
+  color: @fg_faint;
+  padding: 0 9px;
+  margin: 4px 2px;
+  border-radius: 7px;
+  background-color: transparent;
+  /* Short, so clicking through workspaces never feels laggy. */
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+#workspaces button:hover {
+  color: @fg;
+  background-color: @surface;
+  /* Kill the default GTK hover box-shadow. */
+  box-shadow: none;
+  text-shadow: none;
+}
+
+#workspaces button.active {
+  color: @bg;
+  background-color: @accent;
+}
+
+#workspaces button.urgent {
+  color: @bg;
+  background-color: @red;
+}
+
+#workspaces button.empty {
+  color: @fg_faint;
+}
+
+#submap {
+  color: @accent_alt;
+  padding: 0 10px;
+}
+
+/* ───────────────────────────────────────────────────────────── window ─── */
+
+#window {
+  color: @fg_dim;
+  padding: 0 14px;
+}
+
+window#waybar.empty .modules-center {
+  /* Nothing focused: hide the slab rather than show an empty pill. */
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* ────────────────────────────────────────────────────────────── right ─── */
+
+#tray,
+#bluetooth,
+#network,
+#wireplumber,
+#battery,
+#clock {
+  padding: 0 10px;
+  margin: 4px 1px;
+  border-radius: 7px;
+  color: @fg;
+}
+
+#tray > .passive     { -gtk-icon-effect: dim; }
+#tray > .needs-attention {
+  -gtk-icon-effect: highlight;
+  background-color: @red;
+  border-radius: 7px;
+}
+
+#bluetooth            { color: @fg_dim; }
+#bluetooth.connected  { color: @blue; }
+#bluetooth.disabled   { color: @fg_faint; }
+
+#network              { color: @fg_dim; }
+#network.disconnected { color: @red; }
+#network.ethernet,
+#network.wifi         { color: @fg; }
+
+#wireplumber          { color: @fg; }
+#wireplumber.muted    { color: @fg_faint; }
+
+#battery              { color: @fg; }
+#battery.charging     { color: @green; }
+#battery.warning:not(.charging)  { color: @yellow; }
+#battery.critical:not(.charging) {
+  color: @red;
+  /* The one animation in the bar. Reserved for "plug this in now". */
+  animation: blink 1.2s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to { color: @fg; }
+}
+
+#clock {
+  color: @fg;
+  font-weight: 600;
+  padding: 0 12px;
+}
+
+/* Tooltips — calendar, network details, battery estimate. */
+tooltip {
+  background-color: @bg_alt;
+  border: 1px solid @overlay;
+  border-radius: 10px;
+}
+
+tooltip label {
+  color: @fg;
+  padding: 4px;
+}

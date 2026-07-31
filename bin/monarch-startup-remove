@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+#DESC: Remove an app from your session startup
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_startup-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Remove an app from your session startup.
+
+Usage:
+  monarch startup remove <command>
+
+The command must match what `monarch startup list` shows. If exactly one entry
+contains what you typed, that one is removed — so the binary name alone is
+usually enough.
+
+Examples:
+  monarch startup remove signal-desktop
+  monarch startup remove "signal-desktop --start-in-tray"
+EOF
+}
+
+main() {
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*)        err "unknown option: $1"; printf '\n'; usage >&2; exit 1 ;;
+      *)         args+=("$1") ;;
+    esac
+    shift
+  done
+
+  [[ ${#args[@]} -gt 0 ]] || { err "nothing to remove"; printf '\n'; usage >&2; exit 1; }
+  local query="${args[*]}"
+
+  ensure_startup_file
+
+  local apps=() a
+  while IFS= read -r a; do [[ -n "$a" ]] && apps+=("$a"); done < <(read_startup_apps)
+
+  if [[ ${#apps[@]} -eq 0 ]]; then
+    err "no startup apps configured"
+    exit 1
+  fi
+
+  # Exact match wins outright.
+  local target=""
+  for a in "${apps[@]}"; do
+    if [[ "$a" == "$query" ]]; then target="$a"; break; fi
+  done
+
+  # Otherwise fall back to substring, but only when it is unambiguous.
+  if [[ -z "$target" ]]; then
+    local matches=()
+    for a in "${apps[@]}"; do
+      [[ "$a" == *"$query"* ]] && matches+=("$a")
+    done
+
+    case ${#matches[@]} in
+      0)
+        err "not a startup app: $query"
+        printf '\nCurrently configured:\n' >&2
+        for a in "${apps[@]}"; do printf '  %s\n' "$a" >&2; done
+        exit 1
+        ;;
+      1)
+        target="${matches[0]}"
+        ;;
+      *)
+        err "'$query' matches ${#matches[@]} startup apps — be more specific"
+        printf '\n' >&2
+        for a in "${matches[@]}"; do printf '  %s\n' "$a" >&2; done
+        exit 1
+        ;;
+    esac
+  fi
+
+  local kept=()
+  for a in "${apps[@]}"; do
+    [[ "$a" == "$target" ]] || kept+=("$a")
+  done
+
+  write_startup_apps ${kept+"${kept[@]}"}
+  reload_hyprland
+
+  ok "removed: $target"
+  step "${#kept[@]} startup app(s) remain"
+}
+
+main "$@"

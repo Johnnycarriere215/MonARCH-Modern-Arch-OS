@@ -83,6 +83,7 @@ bootstrap.sh  one-command install onto fresh Arch
 
 START-HERE.md  session protocol for AI assistants
 PROGRESS.md    build state — read every session, update every session
+HANDOFF.md     cold-start pointers + the VM test procedure
 MONARCH.md     this file
 ```
 

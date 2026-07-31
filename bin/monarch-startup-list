@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#DESC: List the apps that start with your session
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_startup-lib.sh"
+
+usage() {
+  cat <<'EOF'
+List the apps that start with your session.
+
+Usage:
+  monarch startup list [--plain]
+
+  --plain   one command per line, no headings — for scripts and the GUI
+
+Shows only your apps. The essentials (bar, notifications, idle daemon, polkit
+agent) live in autostart.conf and are not managed here.
+EOF
+}
+
+main() {
+  local plain=false
+  case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    --plain)   plain=true ;;
+    "")        ;;
+    *) err "unknown argument: $1"; printf '\n'; usage >&2; exit 1 ;;
+  esac
+
+  ensure_startup_file
+
+  local apps=() a
+  while IFS= read -r a; do [[ -n "$a" ]] && apps+=("$a"); done < <(read_startup_apps)
+
+  if [[ "$plain" == true ]]; then
+    for a in ${apps+"${apps[@]}"}; do printf '%s\n' "$a"; done
+    exit 0
+  fi
+
+  if [[ ${#apps[@]} -eq 0 ]]; then
+    info "No startup apps configured"
+    printf '\n  Add one with:  %smonarch startup add "signal-desktop"%s\n' \
+      "$C_BOLD" "$C_RESET"
+    exit 0
+  fi
+
+  info "Startup apps (${#apps[@]})"
+  for a in "${apps[@]}"; do
+    printf '  %s\n' "$a"
+  done
+  printf '\n%s  %s%s\n' "$C_DIM" "$STARTUP_FILE" "$C_RESET"
+}
+
+main "$@"

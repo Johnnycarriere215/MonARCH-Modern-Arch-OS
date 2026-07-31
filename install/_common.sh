@@ -60,24 +60,9 @@ write_system_file() {
   ok "wrote $dest"
 }
 
-# Copy a MonARCH-shipped file into the user's home.
-# If the target exists and differs, it is assumed to be the user's own work and
-# gets moved to .bak rather than silently overwritten.
-deploy_user_file() {
-  local src=$1 dest=$2
-
-  if [[ -f "$dest" ]]; then
-    if cmp -s "$src" "$dest"; then
-      return 0   # already ours, nothing to say
-    fi
-    local backup="$dest.bak"
-    step "$dest differs from the shipped version — saving yours as $backup"
-    mv "$dest" "$backup"
-  fi
-
-  install -D -m 0644 "$src" "$dest"
-  step "installed $dest"
-}
+# Deploying into $HOME lives in bin/monarch-config-apply, not here. The
+# installer shells out to it (golden rule 1), so there is one implementation of
+# "do not clobber the user's edits" rather than two that drift apart.
 
 # ------------------------------------------------------------------ units ---
 

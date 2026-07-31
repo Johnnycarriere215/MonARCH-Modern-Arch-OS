@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+#DESC: Deploy MonARCH's configs into ~/.config without clobbering your edits
+
+set -euo pipefail
+
+# Resolve through symlinks — this is invoked as ~/.local/bin/monarch-config-apply.
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+
+usage() {
+  cat <<'EOF'
+Deploy MonARCH's shipped configuration into ~/.config.
+
+Usage:
+  monarch config apply [--dry-run] [--force] [--quiet]
+
+  --dry-run   say what would happen, change nothing
+  --force     re-install even files you have edited (still backed up to .bak)
+  --quiet     only report changes, not files already up to date
+
+How your edits are protected
+
+  MonARCH records a checksum of every file it writes. On the next run each
+  target falls into one of four cases:
+
+    identical to what we ship   nothing to do
+    matches what we last wrote  yours is untouched, so it is safe to update
+    differs from both           you edited it: saved to <file>.bak, then updated
+    listed in config/.seed-only written once, then never touched again
+
+  So an update can improve a config you have not customised, and can never
+  silently discard one you have.
+EOF
+}
+
+DRY_RUN=false
+FORCE=false
+QUIET=false
+
+# Counters for the closing summary.
+n_installed=0 n_updated=0 n_backed_up=0 n_current=0 n_kept=0
+
+apply_one() {
+  local src=$1 rel=$2
+  local dest="$MONARCH_CONFIG_DIR/$rel"
+
+  local src_sum; src_sum=$(hash_file "$src")
+
+  # ---- seed-only: install if missing, otherwise never touch -----------------
+  if is_seed_only "$rel"; then
+    if [[ ! -e "$dest" ]]; then
+      if [[ "$DRY_RUN" == false ]]; then
+        install -D -m 0644 "$src" "$dest"
+        manifest_set "$rel" "$src_sum"
+      fi
+      step "seeded  $rel"
+      n_installed=$((n_installed + 1))
+    else
+      [[ "$QUIET" == false ]] && step "kept    $rel ${C_DIM}(yours)${C_RESET}"
+      n_kept=$((n_kept + 1))
+    fi
+    return 0
+  fi
+
+  # ---- new file ------------------------------------------------------------
+  if [[ ! -e "$dest" ]]; then
+    if [[ "$DRY_RUN" == false ]]; then
+      install -D -m 0644 "$src" "$dest"
+      manifest_set "$rel" "$src_sum"
+    fi
+    step "install $rel"
+    n_installed=$((n_installed + 1))
+    return 0
+  fi
+
+  local dest_sum; dest_sum=$(hash_file "$dest")
+
+  # ---- already what we ship ------------------------------------------------
+  if [[ "$dest_sum" == "$src_sum" ]]; then
+    # Record it even so: a file that arrived some other way is now known to be
+    # ours, which keeps the next run from mistaking it for a user edit.
+    [[ "$DRY_RUN" == false ]] && manifest_set "$rel" "$src_sum"
+    [[ "$QUIET" == false ]] && step "current $rel"
+    n_current=$((n_current + 1))
+    return 0
+  fi
+
+  # ---- unmodified since we last wrote it: safe to update --------------------
+  local known=""
+  known=$(manifest_get "$rel" 2>/dev/null || true)
+
+  if [[ -n "$known" && "$known" == "$dest_sum" ]]; then
+    if [[ "$DRY_RUN" == false ]]; then
+      install -D -m 0644 "$src" "$dest"
+      manifest_set "$rel" "$src_sum"
+    fi
+    step "update  $rel"
+    n_updated=$((n_updated + 1))
+    return 0
+  fi
+
+  # ---- the user edited this ------------------------------------------------
+  if [[ "$FORCE" == false ]]; then
+    loud "$rel has your edits — keeping them, shipping version NOT applied"
+    step "        run with --force to take the new version (yours -> $rel.bak)"
+    n_kept=$((n_kept + 1))
+    return 0
+  fi
+
+  loud "$rel has your edits — saving them to $rel.bak and overwriting"
+  if [[ "$DRY_RUN" == false ]]; then
+    cp -a "$dest" "$dest.bak"
+    install -D -m 0644 "$src" "$dest"
+    manifest_set "$rel" "$src_sum"
+  fi
+  n_backed_up=$((n_backed_up + 1))
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --dry-run) DRY_RUN=true ;;
+      --force)   FORCE=true ;;
+      --quiet)   QUIET=true ;;
+      *) err "unknown argument: $1"; printf '\n'; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+
+  local src_root="$MONARCH_HOME/config"
+  [[ -d "$src_root" ]] || die "no config/ directory in $MONARCH_HOME"
+
+  load_seed_only
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "Dry run — nothing will be written"
+  fi
+  info "Deploying config -> $MONARCH_CONFIG_DIR"
+
+  local file rel
+  while IFS= read -r file; do
+    rel=${file#"$src_root"/}
+    apply_one "$file" "$rel"
+  done < <(find "$src_root" -type f ! -name '.gitkeep' ! -name '.seed-only' | sort)
+
+  printf '\n'
+  ok "$n_installed installed · $n_updated updated · $n_current current · $n_kept kept · $n_backed_up backed up"
+
+  if [[ $n_backed_up -gt 0 ]]; then
+    warn "$n_backed_up file(s) you had edited were replaced. Your versions are alongside them as .bak"
+  fi
+
+  # Hyprland picks up changes without a restart, and there is no reason to make
+  # someone log out to see a config land.
+  if [[ "$DRY_RUN" == false ]] && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && have hyprctl; then
+    hyprctl reload >/dev/null 2>&1 && step "reloaded Hyprland"
+  fi
+}
+
+main "$@"

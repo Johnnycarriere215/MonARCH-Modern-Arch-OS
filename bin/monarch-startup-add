@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#DESC: Add an app to your session startup
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_startup-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Add an app to your session startup.
+
+Usage:
+  monarch startup add <command> [--force]
+
+  --force   add even if the executable cannot be found on PATH
+
+Examples:
+  monarch startup add signal-desktop
+  monarch startup add "signal-desktop --start-in-tray"
+
+Quote anything with arguments, or the shell splits it before MonARCH sees it.
+Takes effect at next login; the current session is reloaded but already-running
+apps are not started retroactively.
+EOF
+}
+
+main() {
+  local force=false
+  local args=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --force)   force=true ;;
+      -*)        err "unknown option: $1"; printf '\n'; usage >&2; exit 1 ;;
+      *)         args+=("$1") ;;
+    esac
+    shift
+  done
+
+  [[ ${#args[@]} -gt 0 ]] || { err "nothing to add"; printf '\n'; usage >&2; exit 1; }
+
+  # `monarch startup add signal-desktop --start-in-tray` without quotes arrives
+  # as separate words. Rejoining is friendlier than an error about quoting.
+  local command="${args[*]}"
+
+  # Does the executable exist? The first word is the binary.
+  local binary=${command%% *}
+  if ! have "$binary"; then
+    if [[ "$force" == false ]]; then
+      err "'$binary' is not on PATH"
+      printf '\nAn entry pointing at a missing binary fails silently at login,\n' >&2
+      printf 'which is a miserable thing to debug. Install it first, or use --force.\n' >&2
+      exit 1
+    fi
+    warn "'$binary' is not on PATH — adding anyway (--force)"
+  fi
+
+  ensure_startup_file
+
+  local apps=() a
+  while IFS= read -r a; do [[ -n "$a" ]] && apps+=("$a"); done < <(read_startup_apps)
+
+  for a in ${apps+"${apps[@]}"}; do
+    if [[ "$a" == "$command" ]]; then
+      info "Already a startup app: $command"
+      exit 0
+    fi
+  done
+
+  apps+=("$command")
+  write_startup_apps "${apps[@]}"
+  reload_hyprland
+
+  ok "added: $command"
+  step "${#apps[@]} startup app(s) — takes effect at next login"
+}
+
+main "$@"

@@ -1,0 +1,154 @@
+// MonARCH — Waybar
+//
+// Workspaces, window title, clock, tray, network, bluetooth, audio, battery.
+// System stats (CPU, RAM, GPU, disk, network throughput) arrive in T5 and go
+// in the right-hand group alongside these.
+//
+// No colours here. style.css owns appearance and reads its palette from
+// ~/.config/monarch/theme/waybar-colors.css.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 34,
+  "spacing": 0,
+
+  "modules-left": [
+    "hyprland/workspaces",
+    "hyprland/submap"
+  ],
+
+  "modules-center": [
+    "hyprland/window"
+  ],
+
+  "modules-right": [
+    "tray",
+    "bluetooth",
+    "network",
+    "wireplumber",
+    "battery",
+    "clock"
+  ],
+
+  // ─────────────────────────────────────────────────────────────── left ───
+
+  "hyprland/workspaces": {
+    // 1-5 are persistent, so they are always here. 6 appears when you create
+    // it and vanishes with its last window — that is Hyprland's doing, not a
+    // setting here.
+    "format": "{icon}",
+    "format-icons": {
+      "1": "1",
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5": "5",
+      "6": "6",
+      "urgent": "!",
+      "default": "•"
+    },
+    "on-click": "activate",
+    "sort-by-number": true,
+    "all-outputs": true,
+    // The dropdown terminal lives on a special workspace. Showing it in the
+    // bar would be noise — it has its own key.
+    "show-special": false
+  },
+
+  "hyprland/submap": {
+    "format": "  {}  ",
+    "tooltip": false
+  },
+
+  // ───────────────────────────────────────────────────────────── center ───
+
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 70,
+    "separate-outputs": true,
+    "rewrite": {
+      "(.*) — Mozilla Firefox": "$1",
+      "(.*) - Chromium": "$1",
+      "(.*) - Visual Studio Code": "$1",
+      "": "MonARCH"
+    }
+  },
+
+  // ────────────────────────────────────────────────────────────── right ───
+
+  "tray": {
+    "icon-size": 16,
+    "spacing": 10
+  },
+
+  "bluetooth": {
+    "format": "",
+    "format-disabled": "",
+    "format-connected": " {num_connections}",
+    "tooltip-format": "{controller_alias}\n{num_connections} connected",
+    "tooltip-format-connected": "{controller_alias}\n\n{device_enumerate}",
+    "tooltip-format-enumerate-connected": "{device_alias}",
+    "on-click": "blueman-manager"
+  },
+
+  "network": {
+    "format-wifi": "  {signalStrength}%",
+    "format-ethernet": "󰈀",
+    "format-linked": "󰈀 no IP",
+    "format-disconnected": "󰤮",
+    "tooltip-format-wifi": "{essid}\n{ipaddr}\n{signalStrength}% signal",
+    "tooltip-format-ethernet": "{ifname}\n{ipaddr}",
+    "tooltip-format-disconnected": "Disconnected",
+    "on-click": "nm-connection-editor",
+    // 10s. Fast enough to notice a drop, slow enough to stay off the CPU
+    // graph. T5 sets the same discipline for the stats modules.
+    "interval": 10
+  },
+
+  "wireplumber": {
+    "format": "{icon}  {volume}%",
+    "format-muted": "󰝟",
+    "format-icons": ["󰕿", "󰖀", "󰕾"],
+    "on-click": "pavucontrol",
+    "on-scroll-up": "wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
+    "max-volume": 100
+  },
+
+  "battery": {
+    "states": {
+      "warning": 25,
+      "critical": 10
+    },
+    "format": "{icon}  {capacity}%",
+    "format-charging": "󰂄  {capacity}%",
+    "format-plugged": "󰚥  {capacity}%",
+    "format-icons": ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+    "tooltip-format": "{capacity}% — {timeTo}\n{power}W",
+    "interval": 30
+  },
+
+  "clock": {
+    "format": "{:%H:%M}",
+    "format-alt": "{:%a %e %b  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>",
+    "calendar": {
+      "mode": "month",
+      "weeks-pos": "right",
+      // Weight and underline only — no colours. Pango markup cannot read the
+      // theme's CSS variables, so any hex here would be a colour the theme
+      // engine could never reach. The tooltip inherits its palette from
+      // style.css instead.
+      "format": {
+        "months":   "<b>{}</b>",
+        "weekdays": "<b>{}</b>",
+        "today":    "<b><u>{}</u></b>"
+      }
+    },
+    "actions": {
+      "on-click-right": "mode",
+      "on-scroll-up": "shift_up",
+      "on-scroll-down": "shift_down"
+    }
+  }
+}

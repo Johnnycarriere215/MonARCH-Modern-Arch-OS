@@ -1,0 +1,39 @@
+# MonARCH — settings
+#
+# The defaults MonARCH ships with. This file is YOURS once installed:
+# monarch-config-apply seeds it if it is missing and never touches it again,
+# so an update cannot reset your preferences.
+#
+# The `monarch` CLI is the only thing that writes here. The settings GUI shells
+# out to it rather than editing this file, so the two can never disagree
+# (golden rule 1).
+
+# Which mode the desktop starts in.
+#   tiling       Hyprland as intended — keyboard-first, windows tile
+#   windows      title bars, close buttons, taskbar, floating by default
+#   performance  animations and blur off, for battery or heavy builds
+# Implemented in T6. Until then this is recorded but not acted on.
+mode = "tiling"
+
+# The active theme. Names match directories under themes/.
+# Implemented in T3.
+theme = "midnight"
+
+# balanced | powersave | performance
+# Drives CPU governor and the animation budget. Implemented in T6.
+performance_profile = "balanced"
+
+# Persistent workspaces. Locked decision: 5, with a 6th created on demand and
+# destroyed when its last window closes. Changing this requires a matching edit
+# to the workspace rules in config/hypr/monarch.conf, which is why the GUI will
+# own it rather than leaving you to keep two files in sync.
+workspace_count = 5
+
+# stable | dev
+# Locked decision: two channels, nothing else. Implemented in T7.
+update_channel = "stable"
+
+# Applications launched at login, beyond the essentials in autostart.conf.
+# Managed with: monarch startup add|remove|list
+# Each entry is a command line, exactly as it would be typed.
+startup_apps = []
