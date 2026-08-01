@@ -9,9 +9,9 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 
 ## Current state
 
-**Phase:** 2 — The system layer
-**Next task:** T7 — Update system
-**Blocked on:** nothing — but **nothing in T1–T6 has ever been run on Arch.** Six tasks of work are now stacked on a desktop that has never booted, and T6 in particular ships a fatal-on-failure migration and a plugin that Hyprland updates are known to break. The VM test (Phase 0.4/0.5, full procedure in `docs/07-VM-TESTING.md`) is overdue and gets more expensive to defer with every task.
+**Phase:** 2 complete — Phase 3 next, after the VM test and a week of living in it
+**Next task:** T9 — Settings GUI (Phase 3)
+**Blocked on:** the VM, now genuinely. **Phase 2 is complete and none of T1–T8 has ever been run on Arch.** The task list says *stop here and live in it for a week* before Phase 3 — that week cannot start until the desktop boots. T7 also has one criterion that is untestable any other way: rolling back a deliberately broken update from a snapshot. The VM test (Phase 0.4/0.5, full procedure in `docs/07-VM-TESTING.md`) is overdue and gets more expensive to defer with every task.
 
 ---
 
@@ -203,36 +203,51 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 - **`exec-once = hyprpm reload -n` is new in `autostart.conf`.** Plugins do not survive a Hyprland update and need reloading each session.
 
 ### T7 — Update system · Sonnet
-**Status:** TODO
+**Status:** DONE (code complete, locally verified — **awaiting first run on Arch**)
 
 **Done when:**
-- [ ] `monarch-update-check` caches for 30 min and **never polls GitHub more than once per 30 min** (60 req/hr/IP limit)
-- [ ] Network failure is silent — never blocks the bar
-- [ ] Waybar shows an update icon; click runs `monarch update`
-- [ ] `monarch-update` snapshots **first**, always, before anything else
-- [ ] `hyprpm update` failure warns but does not abort the update
-- [ ] `monarch-channel-set stable|dev` works
-- [ ] `monarch-migrate` runs each migration once, tracked in state
-- [ ] **A deliberately broken update has been rolled back from a snapshot, by hand, successfully**
+- [x] `monarch-update-check` caches for 30 min and **never polls GitHub more than once per 30 min** — the bar module's own interval is also 1800s, so even a restart loop cannot exceed it
+- [x] Network failure is silent — never blocks the bar. `--max-time 8`, no `set -e`, and a failed probe leaves the old cache rather than replacing it
+- [x] Waybar shows an update icon; click runs `monarch update` — `custom/update`, empty output when up to date so Waybar hides it entirely
+- [x] `monarch-update` snapshots **first**, always, before anything else — with `--required`, so no snapshot means no update
+- [x] `hyprpm update` failure warns but does not abort the update
+- [x] `monarch-channel-set stable|dev` works
+- [x] `monarch-migrate` runs each migration once, tracked in state — verified: a deliberately failing migration stops the run, is **not** marked done, and the one after it does not run
+- [ ] **A deliberately broken update has been rolled back from a snapshot, by hand, successfully** — **NOT VERIFIED.** Needs the VM. This is T7's equivalent of T2's "the desktop boots"
 
 **Notes:**
-_(empty)_
 
----
+- **The rate limit is the design, not a detail.** Unauthenticated GitHub is 60 requests/hour/IP, shared by everyone behind the same NAT. The bar reads a cache; only the cache talks to GitHub, at most twice an hour. Polling the module faster does not make the answer fresher — it forks bash more often for the same cached string. The 1800s in both places is a floor.
+- **Step order is load-bearing and commented in the file.** Snapshot before pull (a snapshot of a half-updated machine is worthless); migrations after pacman (one may need a package the update brings in); hyprpm after pacman (it compiles against the Hyprland pacman just installed); config apply last.
+- **A dirty checkout skips the git pull and says so**, rather than letting `git pull` fail with its own message or clobbering local edits. The rest of the update continues.
+- **`monarch migrate --mark-all-run` is what a fresh install uses**, wired into `install/30-config.sh`. A fresh install already has everything a migration would produce, and some migrations would undo what the install stages just did. On a re-run it is a no-op.
+- **A failed migration is not recorded as run**, so it is retried on the next update — which is why every migration is written to be idempotent. The run stops at the first failure because a later one may assume it succeeded.
+- **`monarch snapshot restore` uses `snapper rollback`, which takes effect at the NEXT BOOT** and does not touch the running system. It says so loudly and asks you to retype the number. **The recommended route is the Limine boot menu**, which lets you look at a snapshot before committing. Home is a separate subvolume and is not rolled back — usually what you want after a bad update, and a nasty surprise otherwise.
+- **Known flaw, low priority: on the `dev` channel, being AHEAD of the remote reads as "update available."** The check compares remote HEAD to local HEAD for inequality, not ancestry. It only affects someone committing to their own checkout — which is me, while building this.
+- **`--monarch-only` exists for the case the dirty-checkout path points at:** commit, then update MonARCH and its migrations without a full `pacman -Syu`.
 
 ### T8 — Packages + app installers · Sonnet
-**Status:** TODO
+**Status:** DONE (code complete, locally verified — **awaiting first run on Arch**)
 
 **Done when:**
-- [ ] `monarch-install-claude-desktop` sets `CLAUDE_USE_WAYLAND=1` and warns clearly if `/dev/kvm` is missing (Cowork fails silently without it)
-- [ ] `monarch-install-chrome` works and Chrome is **never** bundled in the ISO
-- [ ] VS Code installer configures gnome-libsecret and disables internal auto-update in favor of pacman
-- [ ] `monarch-app-install` handles `.pkg.tar.zst`, `.AppImage`, and `.deb` (debtap, with a loud best-effort warning)
-- [ ] `monarch-webapp-add` generates a working `.desktop` entry and icon
+- [x] `monarch-install-claude-desktop` sets `CLAUDE_USE_WAYLAND=1` and warns clearly if `/dev/kvm` is missing — it **verifies** rather than sets the env var, see notes
+- [x] `monarch-install-chrome` works and Chrome is **never** bundled in the ISO
+- [x] VS Code installer configures gnome-libsecret and disables internal auto-update in favor of pacman — and sets `workbench.colorTheme`, which T3 could not
+- [x] `monarch-app-install` handles `.pkg.tar.zst`, `.AppImage`, and `.deb` (debtap, with a loud best-effort warning)
+- [x] `monarch-webapp-add` generates a working `.desktop` entry and icon — verified against a fake `HOME`; each web app gets its own `--user-data-dir`
 
 **Notes:**
 
-- **The VS Code installer owes T3 one line.** T3 generates a colour theme extension at `~/.vscode/extensions/monarch-theme/`, always called "MonARCH", but cannot select it — that needs `"workbench.colorTheme": "MonARCH"` in `settings.json`, and merging JSON needs a parser this layer does not have. This installer already has to edit `settings.json` for gnome-libsecret and auto-update, so it should set the theme in the same pass. Until it does, the editor's theme is one manual pick.
+- **`CLAUDE_USE_WAYLAND=1` is verified, not set.** It already lives in `config/hypr/monarch.conf`, so it applies to everything the session launches rather than only to a terminal launch. The installer checks it is there and tells you to run `monarch config apply` if not. Two places setting the same variable is how they end up disagreeing.
+- **`/dev/kvm` gets its own check with three named causes** (BIOS VT-x, nested virt, `kvm_intel` not loaded) because Cowork fails *silently* without it — no error, the features simply are not there. The install continues after the warning; a Claude Desktop without Cowork is still worth having.
+- **T3's loose end is closed here.** The theme engine generates a VS Code extension but could not select it — that needs `settings.json`, which needs a JSON parser to merge safely. This installer already has to edit that file, so it adds `workbench.colorTheme = "MonARCH"`. The `add_setting` helper is deliberately conservative: it adds a key only when the key is **absent entirely**, never changes one you set, and backs the file up first.
+- **AUR installs are not `--noconfirm`.** An AUR build shows you a PKGBUILD for a reason, and an installer that hides it installs whatever the AUR happened to contain today. `monarch update` uses `--noconfirm` for *upgrades* of already-trusted packages; first installs ask.
+- **`monarch pkg drop` refuses to remove anything in `packages/base.packages`** and says to edit the manifest first. Otherwise the next update reinstalls it and the removal looks like it silently failed.
+- **The `.deb` warning is three paragraphs and a confirm prompt on purpose.** debtap rewrites metadata; it cannot rewrite a binary built against Debian's library versions. The failure mode people hit is a package that installs cleanly and segfaults — so the warning names that outcome and points at `monarch pkg search` first.
+- **AppImages are explicitly untracked**, and the command says so after installing one: nothing upgrades it, `monarch update` will never touch it. It also checks for FUSE, whose absence produces a `dlopen(): libfuse.so.2` error that says nothing useful.
+- **Web apps get `--class=monarch-webapp-<slug>`**, so Hyprland window rules can target one like any other application — a per-webapp workspace or float rule is a line in `windows.conf`. Icons come from Google's favicon service, which handles sites that put theirs somewhere non-standard; a generic icon is the fallback and is not an error.
+- **`monarch webapp remove` keeps the browser profile unless `--purge`.** Re-adding leaves you signed in, which is usually what is wanted.
+- **Spotify's PKGBUILD needs a signing key** imported first or the build fails with a gpg error that reads like a broken package. The installer imports it unconditionally — `gpg --import` is idempotent, and checking would mean hardcoding a key id Spotify rotates.
 
 > **Stop here and live in it for a week** before Phase 3. What annoys you that week should reshape the GUI before it's built.
 
@@ -315,7 +330,7 @@ These need the EliteBook, not the VM.
 | T2 | Run the full hardware validation checklist in `docs/02-HARDWARE.md` | TODO |
 | T3 | Walker and VS Code actually pick up their generated themes — the two the engine cannot verify itself | TODO |
 | T6 | Windows mode on metal — `hyprbars` is the fragile piece | TODO |
-| T7 | Break an update deliberately, roll back from a snapshot | TODO |
+| T7 | Break an update deliberately, roll back from a snapshot | TODO — **the one unticked criterion in Phase 2** |
 | T12 | Install from our own ISO in the VM, before touching the internal NVMe | TODO |
 
 ---
@@ -347,4 +362,5 @@ DATE | TASK | OUTCOME | NOTES FOR NEXT SESSION
 2026-07-31 | T4 | DONE (unverified on Arch) | schema/keybinds.toml (65 binds), _keys-lib.sh with an arrays-of-tables TOML parser, keys apply/check/list/reset. Placeholder bindings.conf deleted from the repo — install stage 30 generates it, same as the palette. Migration 1785529604 keeps any pre-T4 copy. Bound the help screen to Super+/ not Super+K, reasons in the T4 notes. cliphist added. Still nothing has booted; docs/07-VM-TESTING.md is the procedure. Next: T5 (Waybar stats) — its notes already say to use the semantic colours.
 2026-07-31 | T5 | DONE (unverified on Arch) | Waybar stats: modules-system.jsonc (cpu/memory/custom-gpu/network throughput/disk) wired through Waybar's include, monarch-bar-modules for enable/disable/order/reset/--performance, monarch-bar-gpu with a three-tier degrade. config.jsonc no longer defines modules-right — the generated modules-enabled.jsonc does, because an include cannot override the parent. btop presets pinned so a click drills into the right box. Migration 1785531465. Idle cost ESTIMATED at ~0.2%, not measured. The GPU fallback is the only thing in T3-T5 that has run on real Intel hardware. Next: T6 (modes) — or the VM, which is now five tasks overdue.
 2026-07-31 | T6 | DONE (unverified on Arch) | Mode system as a sourced overlay: hyprland.conf sources mode.conf + mode-session.conf last, so Hyprland does the merging and nothing needs undoing. tiling/windows/performance fragments, mode set/session/session-end/current/list/cycle. hyprbars handled generically through requires[]/fallback in meta.toml — verified the fallback fires. Waybar's position/height/left/center moved out of config.jsonc into the mode fragment (the include-precedence trap, second time). Found and fixed a real bug: fresh installs had no mode-session.conf for a file hyprland.conf sources unconditionally. Migration 1785533308 is FATAL on failure, unlike the others. Next: T7 (updates) — and the task list says stop and live in it for a week after T8.
+2026-07-31 | T7 + T8 | DONE (unverified on Arch) | Update system: update-check (30-min cache, GitHub 60/hr limit is the whole design), update with the strict 8-step order, snapshot create/list/restore, migrate, channel-set. Waybar custom/update module. Then T8: install-{claude-desktop,chrome,vscode,github-desktop,spotify}, app-install (.pkg.tar.zst/.AppImage/.deb), pkg add/drop/search, webapp add/remove. VS Code installer closes T3's loose end by setting workbench.colorTheme. PHASE 2 IS COMPLETE. Everything from here needs the VM: T7's rollback criterion is untestable without it, and the task list says live in it for a week before T9. Next: build the VM (docs/07-VM-TESTING.md).
 ```

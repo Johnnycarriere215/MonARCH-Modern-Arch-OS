@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#DESC: Install Google Chrome
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Install Google Chrome.
+
+Usage:
+  monarch install chrome
+
+Chromium ships with MonARCH; Chrome is this one command. That split is a locked
+decision and a licensing one: Chrome is not redistributable, so it is NEVER in
+the ISO (golden rule 7). This fetches it on your machine at install time.
+
+If you only want DRM video and Widevine, Chromium plus the widevine package is
+the lighter answer.
+END
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  "") ;;
+  *) err "unknown argument: $1"; exit 1 ;;
+esac
+
+info "Google Chrome"
+step "Chromium is already installed — Chrome is the proprietary build"
+
+aur_install google-chrome "Google Chrome"
+
+printf '\n%sWayland: Chrome picks it up from ELECTRON_OZONE_PLATFORM_HINT/ozone flags.%s\n' "$C_DIM" "$C_RESET"
+printf '%sIf it starts blurry, chrome://flags -> Preferred Ozone platform -> Wayland.%s\n' "$C_DIM" "$C_RESET"

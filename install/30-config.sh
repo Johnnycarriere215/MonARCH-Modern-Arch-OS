@@ -108,6 +108,20 @@ stage_30_apply_mode() {
     || die "could not set mode '$mode'"
 }
 
+stage_30_migrations() {
+  # A FRESH install already has everything every migration would produce — the
+  # shipped configuration IS current. Recording them as run without running
+  # them is the point: a migration written to fix an OLD machine has nothing to
+  # do here, and some would undo work the stages above just did.
+  #
+  # On a RE-run this is a no-op, since they are already recorded.
+  local migrate="$MONARCH_HOME/bin/monarch-migrate"
+  [[ -x "$migrate" ]] || { warn "missing $migrate — skipping"; return 0; }
+
+  MONARCH_HOME="$MONARCH_HOME" "$migrate" --mark-all-run \
+    || warn "could not record migrations — the first update will re-run them harmlessly"
+}
+
 stage_30_link_cli() {
   local bindir="$HOME/.local/bin"
   info "Linking the monarch CLI into $bindir"
@@ -154,6 +168,7 @@ stage_30_config() {
   stage_30_apply_keys
   stage_30_apply_bar
   stage_30_apply_mode
+  stage_30_migrations
   stage_30_link_cli
   stage_30_path
 }

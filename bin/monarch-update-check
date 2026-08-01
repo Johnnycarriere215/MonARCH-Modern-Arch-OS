@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+#DESC: Check for a MonARCH update, cached. Also the Waybar module
+
+# NOT `set -e`. This runs from the bar and from cron-ish contexts; a failing
+# probe must produce "no update" and never a gap in the bar or a stalled shell.
+set -uo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+
+usage() {
+  cat <<'EOF'
+Is there a newer MonARCH?
+
+Usage:
+  monarch update check [--json] [--force] [--quiet]
+
+  --json    Waybar custom-module output. Empty when there is nothing to say,
+            which makes Waybar hide the module
+  --force   ignore the cache and ask GitHub now
+  --quiet   exit status only: 0 = update available, 1 = up to date
+
+The rate limit is the whole design
+
+  The unauthenticated GitHub API allows 60 requests per hour per IP. A bar
+  module polling every 30 seconds would burn that in half an hour and then get
+  403s for the rest of it — for every machine behind the same NAT.
+
+  So the answer is cached for 30 minutes and the cache is what the bar reads.
+  The bar can poll as often as it likes; GitHub is asked twice an hour at most.
+
+  A network failure writes nothing and leaves the old cache in place. Being
+  offline must never make the bar flicker or stall.
+EOF
+}
+
+CACHE="$MONARCH_STATE_DIR/update-available"
+CACHE_TTL=1800          # 30 minutes, in seconds. Do not lower this.
+REPO="Johnnycarriere215/MonARCH-Modern-Arch-OS"
+
+JSON=false
+FORCE=false
+QUIET=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --json)    JSON=true ;;
+    --force)   FORCE=true ;;
+    --quiet)   QUIET=true ;;
+    *) err "unknown argument: $1"; exit 1 ;;
+  esac
+  shift
+done
+
+mkdir -p "$MONARCH_STATE_DIR" 2>/dev/null || true
+
+current_channel() {
+  local settings="$MONARCH_CONFIG_DIR/monarch/settings.toml"
+  local value=""
+  [[ -f "$settings" ]] && value=$(sed -n \
+    's/^[[:space:]]*update_channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$settings" | head -n1)
+  printf '%s' "${value:-stable}"
+}
+
+cache_fresh() {
+  [[ -f "$CACHE" ]] || return 1
+  local age now mtime
+  now=$(date +%s)
+  mtime=$(stat -c %Y "$CACHE" 2>/dev/null) || return 1
+  age=$(( now - mtime ))
+  [[ $age -lt $CACHE_TTL ]]
+}
+
+# Ask GitHub. Writes the cache only on success — a failed probe must leave the
+# previous answer alone rather than replacing it with "no update".
+refresh() {
+  have curl || return 1
+
+  local channel; channel=$(current_channel)
+  local latest=""
+
+  if [[ "$channel" == "dev" ]]; then
+    # dev tracks the branch head, not a release. Releases are cut from stable.
+    latest=$(curl -fsSL --max-time 8 \
+      -H 'Accept: application/vnd.github+json' \
+      "https://api.github.com/repos/$REPO/commits/main" 2>/dev/null \
+      | grep -m1 '"sha"' | cut -d'"' -f4 | cut -c1-7)
+  else
+    # /releases/latest 404s until the first release exists, which is the normal
+    # state of this project today. That is a clean "nothing to update to".
+    latest=$(curl -fsSL --max-time 8 \
+      -H 'Accept: application/vnd.github+json' \
+      "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+      | grep -m1 '"tag_name"' | cut -d'"' -f4)
+  fi
+
+  [[ -n "$latest" ]] || return 1
+  printf '%s\n' "$latest" >"$CACHE"
+  return 0
+}
+
+installed_version() {
+  local v="unknown"
+  [[ -r "$MONARCH_HOME/version" ]] && v=$(<"$MONARCH_HOME/version")
+  printf '%s' "${v//[$'\n\r']/}"
+}
+
+installed_commit() {
+  git -C "$MONARCH_HOME" rev-parse --short HEAD 2>/dev/null || printf 'unknown'
+}
+
+# ------------------------------------------------------------------- decide ---
+
+if [[ "$FORCE" == true ]] || ! cache_fresh; then
+  refresh || true
+fi
+
+latest=""
+[[ -f "$CACHE" ]] && latest=$(<"$CACHE")
+latest=${latest//[$'\n\r']/}
+
+channel=$(current_channel)
+if [[ "$channel" == "dev" ]]; then
+  installed=$(installed_commit)
+else
+  installed=$(installed_version)
+  # Compare like with like: a v-prefixed tag against a bare version.
+  latest=${latest#v}
+fi
+
+available=false
+if [[ -n "$latest" && "$latest" != "$installed" ]]; then
+  available=true
+fi
+
+# ------------------------------------------------------------------- report ---
+
+if [[ "$JSON" == true ]]; then
+  if [[ "$available" == true ]]; then
+    printf '{"text":"󰚰","tooltip":"MonARCH %s is available (you have %s)\\nClick to update","class":"available"}\n' \
+      "$latest" "$installed"
+  else
+    # Empty output: Waybar hides the module entirely. An "up to date" icon
+    # sitting in the bar forever is noise.
+    printf '\n'
+  fi
+  exit 0
+fi
+
+if [[ "$QUIET" == true ]]; then
+  [[ "$available" == true ]] && exit 0 || exit 1
+fi
+
+if [[ "$available" == true ]]; then
+  ok "MonARCH $latest is available — you have $installed"
+  printf '\n  Update with: %smonarch update%s\n' "$C_BOLD" "$C_RESET"
+  exit 0
+fi
+
+if [[ -z "$latest" ]]; then
+  info "could not reach GitHub — nothing changed"
+  exit 1
+fi
+
+info "up to date ($installed, channel $channel)"
+exit 1

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#DESC: Search the repos and the AUR
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Search for a package, in the official repos and the AUR.
+
+Usage:
+  monarch pkg search <text> [--repo] [--aur]
+
+  --repo   official repositories only
+  --aur    AUR only
+
+Worth doing before monarch app install: a package from here is one pacman
+tracks, upgrades and removes cleanly. A downloaded .deb is none of those.
+END
+}
+
+REPO_ONLY=false
+AUR_ONLY=false
+TERMS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --repo)    REPO_ONLY=true ;;
+    --aur)     AUR_ONLY=true ;;
+    -*) err "unknown option: $1"; exit 1 ;;
+    *)  TERMS+=("$1") ;;
+  esac
+  shift
+done
+
+[[ ${#TERMS[@]} -gt 0 ]] || { err "search for what?"; printf '\n'; usage >&2; exit 1; }
+require_arch
+
+if [[ "$AUR_ONLY" == false ]]; then
+  printf '%sofficial repositories%s\n' "$C_BOLD" "$C_RESET"
+  pacman -Ss "${TERMS[@]}" || printf '  nothing\n'
+  printf '\n'
+fi
+
+if [[ "$REPO_ONLY" == false ]]; then
+  printf '%sAUR%s\n' "$C_BOLD" "$C_RESET"
+  if have paru; then
+    paru -Ssa "${TERMS[@]}" || printf '  nothing\n'
+  else
+    printf '  %sparu is not installed — AUR not searched%s\n' "$C_DIM" "$C_RESET"
+  fi
+fi
+
+printf '\n%sInstall with: monarch pkg add <name>%s\n' "$C_DIM" "$C_RESET"

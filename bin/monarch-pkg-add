@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#DESC: Install a package from the repos or the AUR
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Install a package, from wherever it lives.
+
+Usage:
+  monarch pkg add <name>...
+
+Looks in the official repositories first and falls back to the AUR, so you do
+not have to know which one a package is in. An AUR build shows you its
+PKGBUILD; read it.
+END
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  "") err "add what?"; printf '\n'; usage >&2; exit 1 ;;
+esac
+
+require_arch
+
+for pkg in "$@"; do
+  if pkg_installed "$pkg"; then
+    ok "$pkg is already installed"
+    continue
+  fi
+
+  # -Si succeeds only for a package in a configured repository, which is
+  # exactly the question being asked.
+  if pacman -Si "$pkg" >/dev/null 2>&1; then
+    repo_install "$pkg"
+  else
+    step "$pkg is not in the repositories — trying the AUR"
+    aur_install "$pkg" || err "$pkg not found in the repos or the AUR"
+  fi
+done

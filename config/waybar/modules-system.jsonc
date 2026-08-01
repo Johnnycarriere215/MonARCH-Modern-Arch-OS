@@ -98,6 +98,25 @@
     "on-click": "alacritty --class monarch-float -e btop -p 2"
   },
 
+  // ─────────────────────────────────────────────────────────────── update ───
+  //
+  // Shows an icon only when there is something to install; `monarch update
+  // check --json` prints nothing otherwise and Waybar hides the module.
+  //
+  // 30 MINUTES, and that is not a typo. The module reads a cache; the cache is
+  // what talks to GitHub, at most twice an hour. The unauthenticated GitHub API
+  // allows 60 requests per hour per IP, shared by everyone behind the same NAT,
+  // so a bar polling this every 30 seconds would exhaust it and start getting
+  // 403s. Polling faster here does not make the answer fresher — it only forks
+  // bash more often.
+  "custom/update": {
+    "exec": "monarch-update-check --json",
+    "return-type": "json",
+    "interval": 1800,
+    "format": "{}",
+    "on-click": "alacritty --class monarch-float -e bash -c 'monarch update; read -n1 -s -p \"\nPress any key...\"'"
+  },
+
   // ───────────────────────────────────────────────────────────────── disk ───
   //
   // Free space on /, which on a Btrfs root is also where snapshots live. 60s:

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+#DESC: Remove a web app, and optionally its browser profile
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Remove a web app.
+
+Usage:
+  monarch webapp remove <slug> [--purge]
+  monarch webapp remove --list
+
+  --purge   also delete its browser profile — cookies, logins, local storage
+
+Without --purge the profile is kept, so re-adding the web app leaves you still
+signed in. That is usually what you want and is why it is not the default.
+END
+}
+
+SLUG=""
+PURGE=false
+LIST=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --purge)   PURGE=true ;;
+    --list)    LIST=true ;;
+    -*) err "unknown option: $1"; exit 1 ;;
+    *)  [[ -z "$SLUG" ]] || die "one at a time"; SLUG=$1 ;;
+  esac
+  shift
+done
+
+if [[ "$LIST" == true ]]; then
+  found=false
+  for f in "$MONARCH_APPS_DIR"/monarch-webapp-*.desktop; do
+    [[ -f "$f" ]] || continue
+    found=true
+    name=$(sed -n 's/^Name=//p' "$f" | head -n1)
+    url=$(sed -n 's/^X-MonARCH-Webapp=//p' "$f" | head -n1)
+    slug=$(basename "$f" .desktop); slug=${slug#monarch-webapp-}
+    printf '  %-20s %s%s%s\n' "$slug" "$C_DIM" "$name — $url" "$C_RESET"
+  done
+  [[ "$found" == false ]] && printf '  %s(none)%s\n' "$C_DIM" "$C_RESET"
+  exit 0
+fi
+
+[[ -n "$SLUG" ]] || { err "remove which?"; printf '\n'; usage >&2; exit 1; }
+
+DESKTOP="$MONARCH_APPS_DIR/monarch-webapp-$SLUG.desktop"
+PROFILE="${XDG_DATA_HOME:-$HOME/.local/share}/monarch/webapps/$SLUG"
+
+[[ -f "$DESKTOP" ]] || die "no web app called '$SLUG' — see: monarch webapp remove --list"
+
+rm -f "$DESKTOP"
+rm -f "$MONARCH_ICONS_DIR/webapp-$SLUG.png"
+have update-desktop-database && update-desktop-database "$MONARCH_APPS_DIR" 2>/dev/null || true
+ok "removed $SLUG from the launcher"
+
+if [[ "$PURGE" == true ]]; then
+  rm -rf "$PROFILE"
+  ok "profile deleted — you are signed out of it"
+elif [[ -d "$PROFILE" ]]; then
+  step "profile kept at ${PROFILE/#$HOME/\~} — re-adding leaves you signed in"
+  step "delete it with --purge"
+fi

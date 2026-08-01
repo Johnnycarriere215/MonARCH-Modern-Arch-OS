@@ -1,0 +1,316 @@
+#!/usr/bin/env bash
+#DESC: Update MonARCH and the system, snapshotting first
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+export MONARCH_HOME
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+
+usage() {
+  cat <<'EOF'
+Update MonARCH and the system.
+
+Usage:
+  monarch update [--dry-run] [--yes] [--no-aur] [--monarch-only]
+
+  --dry-run       print the plan, change nothing
+  --yes           do not ask before starting
+  --no-aur        skip AUR packages (they are the slow, breakable part)
+  --monarch-only  MonARCH itself and its migrations; no pacman, no AUR
+
+The order is not negotiable
+
+   1. snapshot          Btrfs, via snapper. NEVER skipped. If it cannot be
+                        taken, the update does not start.
+   2. git pull          on your channel's ref
+   3. pacman -Syu       the system
+   4. migrations        MonARCH's own upgrade steps
+   5. AUR, then orphans
+   6. hyprpm update     plugins rebuilt against the new Hyprland
+   7. config apply      new defaults, without touching your edits
+   8. restart prompt    if the kernel or Hyprland changed
+
+  Steps 1 and 2 are ordered that way because a snapshot taken after the pull
+  is a snapshot of a machine already half-updated. Migrations run after pacman
+  because one may depend on a package the update brings in. hyprpm runs after
+  pacman because it compiles against the Hyprland that pacman just installed.
+EOF
+}
+
+DRY_RUN=false
+ASSUME_YES=false
+DO_AUR=true
+MONARCH_ONLY=false
+
+SETTINGS="$MONARCH_CONFIG_DIR/monarch/settings.toml"
+
+# Set by the pacman step, read by the restart prompt.
+KERNEL_CHANGED=false
+HYPRLAND_CHANGED=false
+
+channel() {
+  local value=""
+  [[ -f "$SETTINGS" ]] && value=$(sed -n \
+    's/^[[:space:]]*update_channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$SETTINGS" | head -n1)
+  printf '%s' "${value:-stable}"
+}
+
+run() {
+  if [[ "$DRY_RUN" == true ]]; then
+    step "would run: $*"
+    return 0
+  fi
+  "$@"
+}
+
+# ---------------------------------------------------------------- 1. snapshot ---
+
+step_snapshot() {
+  info "1/8  Snapshot"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    step "would snapshot / before touching anything"
+    return 0
+  fi
+
+  # --required: golden rule, never auto-apply an update without a snapshot
+  # first. Refusing to start is the correct failure — the whole point of the
+  # snapshot is that this step is the one you cannot recover from without.
+  "$MONARCH_HOME/bin/monarch-snapshot-create" \
+    "before monarch update $(date +%Y-%m-%d\ %H:%M)" --required \
+    || die "no snapshot, no update. Fix snapper first, or take the risk knowingly with:
+    monarch snapshot list        see what you have
+    sudo snapper -c root create-config /"
+}
+
+# --------------------------------------------------------------- 2. git pull ---
+
+step_pull() {
+  local ch; ch=$(channel)
+  info "2/8  MonARCH ($ch)"
+
+  have git || { warn "git is not installed — skipping the MonARCH update"; return 0; }
+  [[ -d "$MONARCH_HOME/.git" ]] || { warn "$MONARCH_HOME is not a git checkout — skipping"; return 0; }
+
+  # Local edits to a tracked file would be clobbered by a pull, or would stop
+  # it dead. Say so plainly rather than letting git's own message be the first
+  # the user hears of it.
+  if [[ -n "$(git -C "$MONARCH_HOME" status --porcelain 2>/dev/null)" ]]; then
+    warn "you have uncommitted changes in $MONARCH_HOME"
+    step "the MonARCH update is skipped; the rest of the update continues"
+    step "commit or stash them, then run: monarch update --monarch-only"
+    return 0
+  fi
+
+  local ref="main"
+  if [[ "$ch" == "stable" ]]; then
+    # Newest release tag. Falls back to main when no release exists yet, which
+    # is this project's current state.
+    run git -C "$MONARCH_HOME" fetch --tags --quiet origin || true
+    local tag
+    tag=$(git -C "$MONARCH_HOME" tag -l 'v*' --sort=-v:refname 2>/dev/null | head -n1)
+    if [[ -n "$tag" ]]; then
+      ref=$tag
+    else
+      step "no release tags yet — following main"
+    fi
+  fi
+
+  run git -C "$MONARCH_HOME" fetch --quiet origin || { warn "could not reach the remote"; return 0; }
+
+  if [[ "$ref" == "main" ]]; then
+    run git -C "$MONARCH_HOME" pull --ff-only --quiet origin main \
+      || { warn "could not fast-forward — resolve it by hand in $MONARCH_HOME"; return 0; }
+  else
+    run git -C "$MONARCH_HOME" checkout --quiet "$ref" \
+      || { warn "could not check out $ref"; return 0; }
+  fi
+
+  [[ "$DRY_RUN" == false ]] && ok "MonARCH at $("$MONARCH_HOME/bin/monarch-version" --short 2>/dev/null || printf '?')"
+}
+
+# ----------------------------------------------------------------- 3. pacman ---
+
+step_pacman() {
+  info "3/8  System packages"
+
+  if [[ "$MONARCH_ONLY" == true ]]; then
+    step "skipped (--monarch-only)"
+    return 0
+  fi
+  have pacman || { warn "no pacman — not an Arch system?"; return 0; }
+
+  # Record what a restart would be for. Checked before the upgrade so the
+  # comparison afterwards means something.
+  local kernel_before hypr_before
+  kernel_before=$(pacman -Q linux 2>/dev/null || printf 'none')
+  hypr_before=$(pacman -Q hyprland 2>/dev/null || printf 'none')
+
+  run sudo pacman -Syu --noconfirm || { err "pacman failed"; return 1; }
+
+  if [[ "$DRY_RUN" == false ]]; then
+    [[ "$(pacman -Q linux 2>/dev/null || printf 'none')" != "$kernel_before" ]] && KERNEL_CHANGED=true
+    [[ "$(pacman -Q hyprland 2>/dev/null || printf 'none')" != "$hypr_before" ]] && HYPRLAND_CHANGED=true
+  fi
+  return 0
+}
+
+# ------------------------------------------------------------- 4. migrations ---
+
+step_migrate() {
+  info "4/8  Migrations"
+  local args=()
+  [[ "$DRY_RUN" == true ]] && args+=(--dry-run)
+  "$MONARCH_HOME/bin/monarch-migrate" "${args[@]}" \
+    || { err "a migration failed — it will be retried next time"; return 1; }
+}
+
+# ------------------------------------------------------------------- 5. AUR ---
+
+step_aur() {
+  info "5/8  AUR"
+
+  if [[ "$MONARCH_ONLY" == true || "$DO_AUR" == false ]]; then
+    step "skipped"
+    return 0
+  fi
+  have paru || { warn "paru is not installed — skipping AUR"; return 0; }
+
+  # Non-fatal by design: an AUR package failing to build is normal and is not
+  # a reason to leave the rest of the update half-done.
+  run paru -Sua --noconfirm || warn "some AUR packages did not update"
+
+  # Orphans last, after everything that might have stopped depending on
+  # something. --noconfirm on a REMOVE needs the list checked first.
+  if [[ "$DRY_RUN" == false ]]; then
+    local orphans
+    orphans=$(pacman -Qtdq 2>/dev/null || true)
+    if [[ -n "$orphans" ]]; then
+      step "orphaned packages:"
+      printf '%s\n' "$orphans" | sed 's/^/       /'
+      if [[ "$ASSUME_YES" == true ]]; then
+        # shellcheck disable=SC2086  # word splitting is wanted
+        sudo pacman -Rns --noconfirm $orphans || warn "could not remove orphans"
+      else
+        printf '  Remove them? [y/N] '
+        local reply; read -r reply
+        # shellcheck disable=SC2086
+        [[ "$reply" =~ ^[Yy] ]] && { sudo pacman -Rns --noconfirm $orphans || warn "could not remove orphans"; }
+      fi
+    fi
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------- 6. hyprpm ---
+
+step_hyprpm() {
+  info "6/8  Hyprland plugins"
+
+  have hyprpm || { step "hyprpm not installed — nothing to do"; return 0; }
+  if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    step "not inside a Hyprland session — plugins rebuild at next login"
+    return 0
+  fi
+
+  # Explicitly non-fatal, per the task spec and for good reason: plugins are
+  # compiled against a pinned Hyprland and break on every Hyprland update.
+  # That is expected, it is why windows mode has a fallback, and it is not a
+  # reason to abort an otherwise good update.
+  if run hyprpm update; then
+    run hyprpm reload -n || warn "hyprpm reload failed"
+  else
+    warn "hyprpm update failed — windows mode may fall back to tiling"
+    step "try again in a session: hyprpm update && hyprpm reload"
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------- 7. config ---
+
+step_config() {
+  info "7/8  Configuration"
+
+  local args=(--quiet)
+  [[ "$DRY_RUN" == true ]] && args+=(--dry-run)
+
+  # config apply never overwrites a file you have edited — it backs it up and
+  # tells you. That is why this can run unattended at the end of an update.
+  "$MONARCH_HOME/bin/monarch-config-apply" "${args[@]}" \
+    || warn "config apply had problems — run it by hand to see them"
+}
+
+# --------------------------------------------------------------- 8. restart ---
+
+step_restart() {
+  info "8/8  Done"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    step "would report whether a restart is needed"
+    return 0
+  fi
+
+  if [[ "$KERNEL_CHANGED" == true ]]; then
+    printf '\n'
+    loud "The kernel was updated. Reboot before you trust this session."
+    printf '  Modules for the running kernel are gone from disk, so USB devices\n' >&2
+    printf '  and filesystems you have not used yet may fail until you do.\n' >&2
+  elif [[ "$HYPRLAND_CHANGED" == true ]]; then
+    printf '\n'
+    loud "Hyprland was updated. Log out and back in."
+    printf '  Plugins are compiled against one Hyprland version — hyprbars, and so\n' >&2
+    printf '  windows mode, will not work again until you do.\n' >&2
+  else
+    ok "no restart needed"
+  fi
+}
+
+# ------------------------------------------------------------------- main ---
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)      usage; exit 0 ;;
+      --dry-run)      DRY_RUN=true ;;
+      -y|--yes)       ASSUME_YES=true ;;
+      --no-aur)       DO_AUR=false ;;
+      --monarch-only) MONARCH_ONLY=true ;;
+      *) err "unknown argument: $1"; printf '\n'; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+
+  [[ "$DRY_RUN" == true ]] && info "Dry run — nothing will change"
+
+  printf '%sMonARCH update%s  %s(channel: %s)%s\n\n' \
+    "$C_BOLD" "$C_RESET" "$C_DIM" "$(channel)" "$C_RESET"
+
+  if [[ "$DRY_RUN" == false && "$ASSUME_YES" == false ]]; then
+    printf 'This snapshots /, then updates MonARCH and the system. Continue? [Y/n] '
+    local reply; read -r reply
+    [[ -z "$reply" || "$reply" =~ ^[Yy] ]] || { info "left alone"; exit 0; }
+    printf '\n'
+  fi
+
+  step_snapshot
+  step_pull
+  step_pacman  || warn "continuing after a pacman failure"
+  step_migrate || warn "continuing after a migration failure"
+  step_aur
+  step_hyprpm
+  step_config
+  step_restart
+
+  # The cache is now wrong either way — either we just updated, or we tried.
+  rm -f "$MONARCH_STATE_DIR/update-available" 2>/dev/null || true
+}
+
+main "$@"

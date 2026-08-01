@@ -137,7 +137,39 @@ of those fails it says which. Everything is logged to
    reboot again, and confirm you are back in windows mode — a session mode must
    not persist.
 
-10. **`monarch keys reset --yes`** and confirm the desktop still has keys. It is
+10. **The update system** (T7). This has the one criterion nothing else can
+    check — the rollback. Do it deliberately, while you have a clean snapshot
+    to come back to:
+    ```bash
+    monarch snapshot list
+    monarch update --dry-run          # read the eight steps, change nothing
+    monarch update                    # snapshots first, always
+    ```
+    Then break something on purpose and roll back:
+    ```bash
+    monarch snapshot create "before I break it"
+    sudo rm -rf /usr/share/hyprland   # or anything else obviously fatal
+    monarch snapshot list             # note the number
+    ```
+    **Reboot and pick the snapshot from the Limine menu.** That is the
+    recommended path and the one worth rehearsing — `monarch snapshot restore`
+    exists but only takes effect at the next boot and does not let you look
+    first. Confirm the desktop comes back.
+
+    Also check the bar: with no releases published yet there should be **no**
+    update icon at all.
+
+11. **The installers** (T8). At least:
+    ```bash
+    monarch install claude-desktop --check   # reports /dev/kvm, installs nothing
+    monarch pkg search ripgrep
+    monarch webapp add "Google Messages" messages.google.com/web
+    ```
+    The web app should appear in Walker and open in its own window with no
+    address bar. `monarch install vscode` then wants a VS Code restart, after
+    which its theme should match the desktop.
+
+12. **`monarch keys reset --yes`** and confirm the desktop still has keys. It is
    the recovery path if a rebind goes wrong, so it is worth knowing it works
    before you need it.
 
@@ -171,5 +203,5 @@ cd /path/to/checkout && ./bootstrap.sh
 ## 8. What to bring back
 
 Paste into the next session: the failing stage name if any, `monarch doctor`
-output, and which of the six checks in section 5 passed. `PROGRESS.md` has
+output, and which of the twelve checks in section 5 passed. `PROGRESS.md` has
 unticked criteria waiting on exactly this.

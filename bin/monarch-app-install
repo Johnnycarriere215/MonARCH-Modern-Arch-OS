@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+#DESC: Install a downloaded .pkg.tar.zst, .AppImage or .deb
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Install something you downloaded.
+
+Usage:
+  monarch app install <file> [--name <name>] [--yes]
+
+  --name   override the application name (default: from the filename)
+  --yes    do not ask, including for the .deb warning
+
+Handled
+
+  .pkg.tar.zst   pacman -U. A real Arch package: pacman tracks it, upgrades
+                 it and removes it cleanly.
+
+  .AppImage      moved to ~/.local/bin, made executable, and given a .desktop
+                 entry with its own icon extracted from the bundle. Nothing
+                 tracks it — updating means downloading a new one.
+
+  .deb           converted with debtap. BEST EFFORT and frequently wrong; see
+                 the warning it prints. Prefer the AUR, always.
+
+What to reach for first
+
+  The AUR has almost everything, and a package from it is one pacman knows
+  about. `monarch pkg search <name>` before this, every time.
+END
+}
+
+FILE=""
+NAME=""
+ASSUME_YES=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --name)    NAME=${2:-}; [[ -n "$NAME" ]] || die "--name needs a value"; shift ;;
+    -y|--yes)  ASSUME_YES=true ;;
+    -*) err "unknown option: $1"; exit 1 ;;
+    *)  [[ -z "$FILE" ]] || die "one file at a time"; FILE=$1 ;;
+  esac
+  shift
+done
+
+[[ -n "$FILE" ]] || { err "install what?"; printf '\n'; usage >&2; exit 1; }
+[[ -f "$FILE" ]] || die "no such file: $FILE"
+
+FILE=$(cd -P "$(dirname "$FILE")" && printf '%s/%s' "$(pwd)" "$(basename "$FILE")")
+BASE=$(basename "$FILE")
+
+confirm() {
+  [[ "$ASSUME_YES" == true ]] && return 0
+  printf '%s [y/N] ' "$1"
+  local reply; read -r reply
+  [[ "$reply" =~ ^[Yy] ]]
+}
+
+# ------------------------------------------------------------ .pkg.tar.zst ---
+
+install_pkg() {
+  require_arch
+  info "Arch package: $BASE"
+  step "pacman will track this one — upgrades and removal work normally"
+  sudo pacman -U --needed "$FILE" || die "pacman refused it"
+  ok "installed"
+}
+
+# --------------------------------------------------------------- .AppImage ---
+
+install_appimage() {
+  local name=${NAME:-}
+  if [[ -z "$name" ]]; then
+    # Foo-1.2.3-x86_64.AppImage -> Foo
+    name=${BASE%.AppImage}
+    name=${name%%-[0-9]*}
+    name=${name//[._]/ }
+  fi
+
+  local slug; slug=$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-')
+  local dest="$HOME/.local/bin/$slug"
+
+  info "AppImage: $name"
+
+  if [[ -e "$dest" ]]; then
+    confirm "$dest exists. Replace it?" || { info "left alone"; exit 0; }
+  fi
+
+  mkdir -p "$HOME/.local/bin"
+  install -m 0755 "$FILE" "$dest"
+  step "installed to ${dest/#$HOME/\~}"
+
+  # FUSE is what an AppImage runs on, and its absence produces a bare
+  # "dlopen(): error loading libfuse.so.2" that says nothing useful.
+  if ! have fusermount && ! have fusermount3; then
+    warn "FUSE is not installed — AppImages will not run"
+    step "sudo pacman -S fuse2"
+  fi
+
+  # Icon: AppImages carry one at the root of their squashfs. --appimage-extract
+  # with a path only unpacks what is asked for, but not every build supports
+  # that, so fall back to a generic icon rather than unpacking the whole thing.
+  local icon="application-x-executable"
+  local tmp; tmp=$(mktemp -d)
+  if (cd "$tmp" && timeout 20 "$dest" --appimage-extract '*.png' >/dev/null 2>&1); then
+    local found
+    found=$(find "$tmp/squashfs-root" -maxdepth 2 -name '*.png' 2>/dev/null | head -n1)
+    if [[ -n "$found" ]]; then
+      mkdir -p "$MONARCH_ICONS_DIR"
+      cp "$found" "$MONARCH_ICONS_DIR/$slug.png"
+      icon="$MONARCH_ICONS_DIR/$slug.png"
+      step "icon extracted"
+    fi
+  fi
+  rm -rf "$tmp"
+
+  write_desktop "$MONARCH_APPS_DIR/monarch-$slug.desktop" \
+    "$name" "$dest %U" "$icon" "Utility;" \
+    "StartupWMClass=$name" \
+    "Comment=AppImage installed by MonARCH — update by downloading a new one"
+
+  ok "$name is in the launcher"
+  loud "Nothing tracks an AppImage. It will never be updated by monarch update."
+}
+
+# -------------------------------------------------------------------- .deb ---
+
+install_deb() {
+  info "Debian package: $BASE"
+
+  printf '\n'
+  loud "debtap is BEST EFFORT and often produces a broken package."
+  printf '\n  A .deb is built against Debian'"'"'s library versions and file layout.\n' >&2
+  printf '  debtap rewrites the metadata; it cannot rewrite the binary. Expect:\n' >&2
+  printf '    * dependencies named for Debian packages that do not exist here\n' >&2
+  printf '    * files in the wrong place, or overwriting a real package'"'"'s files\n' >&2
+  printf '    * a package that installs cleanly and segfaults on launch\n\n' >&2
+  printf '  %sCheck the AUR first — it almost certainly has this:%s\n' "$C_BOLD" "$C_RESET" >&2
+  printf '    monarch pkg search %s\n\n' "${BASE%%_*}" >&2
+
+  confirm "Convert it anyway?" || { info "sensible"; exit 0; }
+
+  if ! have debtap; then
+    err "debtap is not installed"
+    printf '\n  monarch pkg add debtap\n  sudo debtap -u          # build its database first, takes a few minutes\n' >&2
+    exit 1
+  fi
+
+  local work; work=$(mktemp -d)
+  cp "$FILE" "$work/"
+  ( cd "$work" && debtap -q "$BASE" ) || { rm -rf "$work"; die "debtap failed"; }
+
+  local built
+  built=$(find "$work" -name '*.pkg.tar.*' -type f | head -n1)
+  [[ -n "$built" ]] || { rm -rf "$work"; die "debtap produced no package"; }
+
+  step "converted: $(basename "$built")"
+  sudo pacman -U "$built" || { rm -rf "$work"; die "pacman refused the converted package"; }
+  rm -rf "$work"
+
+  ok "installed"
+  loud "If it misbehaves, the conversion is the first suspect, not the app."
+}
+
+# ------------------------------------------------------------------- main ---
+
+case "${BASE,,}" in
+  *.pkg.tar.zst|*.pkg.tar.xz|*.pkg.tar.gz) install_pkg ;;
+  *.appimage)                              install_appimage ;;
+  *.deb)                                   install_deb ;;
+  *)
+    err "don't know what to do with $BASE"
+    printf '\n  Handled: .pkg.tar.zst, .AppImage, .deb\n' >&2
+    printf '  For anything else, try the AUR: monarch pkg search <name>\n' >&2
+    exit 1
+    ;;
+esac

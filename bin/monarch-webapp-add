@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+#DESC: Turn a website into a launcher entry
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Make a website behave like an application.
+
+Usage:
+  monarch webapp add <name> <url> [--icon <file|url>] [--browser <cmd>]
+
+  --icon      a PNG to use. Default: fetched from the site's favicon
+  --browser   default: chromium
+
+Example:
+  monarch webapp add "Google Messages" https://messages.google.com/web
+
+What it does
+
+  Writes a .desktop entry running `chromium --app=<url>`, which opens the site
+  in its own window with no tabs, no address bar and its own entry in the
+  taskbar and Alt-Tab. It is a browser window that stops looking like one.
+
+  Each web app gets its own --user-data-dir, so signing into two Google
+  accounts in two web apps works — which is most of the reason to bother.
+END
+}
+
+NAME=""
+URL=""
+ICON=""
+BROWSER="chromium"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)  usage; exit 0 ;;
+    --icon)     ICON=${2:-}; [[ -n "$ICON" ]] || die "--icon needs a value"; shift ;;
+    --browser)  BROWSER=${2:-}; [[ -n "$BROWSER" ]] || die "--browser needs a value"; shift ;;
+    -*) err "unknown option: $1"; exit 1 ;;
+    *)
+      if [[ -z "$NAME" ]]; then NAME=$1
+      elif [[ -z "$URL" ]]; then URL=$1
+      else die "too many arguments"
+      fi
+      ;;
+  esac
+  shift
+done
+
+[[ -n "$NAME" && -n "$URL" ]] || { err "need a name and a url"; printf '\n'; usage >&2; exit 1; }
+
+# A bare domain is what people type. Chromium wants a scheme.
+[[ "$URL" == http://* || "$URL" == https://* ]] || URL="https://$URL"
+
+SLUG=$(printf '%s' "$NAME" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-')
+[[ -n "$SLUG" ]] || die "'$NAME' does not reduce to a usable filename"
+
+DESKTOP="$MONARCH_APPS_DIR/monarch-webapp-$SLUG.desktop"
+PROFILE="${XDG_DATA_HOME:-$HOME/.local/share}/monarch/webapps/$SLUG"
+
+have "$BROWSER" || die "$BROWSER is not installed"
+
+info "$NAME"
+
+# ------------------------------------------------------------------- icon ---
+
+mkdir -p "$MONARCH_ICONS_DIR"
+ICON_PATH="$MONARCH_ICONS_DIR/webapp-$SLUG.png"
+
+if [[ -n "$ICON" && -f "$ICON" ]]; then
+  cp "$ICON" "$ICON_PATH"
+  step "icon: $ICON"
+elif [[ -n "$ICON" ]]; then
+  curl -fsSL --max-time 10 "$ICON" -o "$ICON_PATH" 2>/dev/null \
+    && step "icon downloaded" \
+    || { warn "could not fetch that icon"; ICON_PATH=""; }
+else
+  # Google's favicon service returns a usable PNG at a size worth having, and
+  # handles the sites that put their icon somewhere non-standard. Falling back
+  # to a generic icon is fine — an entry with the wrong icon still works.
+  domain=${URL#*://}; domain=${domain%%/*}
+  if curl -fsSL --max-time 10 \
+      "https://www.google.com/s2/favicons?sz=128&domain=$domain" \
+      -o "$ICON_PATH" 2>/dev/null && [[ -s "$ICON_PATH" ]]; then
+    step "icon: favicon for $domain"
+  else
+    warn "no icon found — using a generic one"
+    rm -f "$ICON_PATH"
+    ICON_PATH=""
+  fi
+fi
+
+[[ -n "$ICON_PATH" ]] || ICON_PATH="web-browser"
+
+# ---------------------------------------------------------------- desktop ---
+
+mkdir -p "$PROFILE"
+
+# --class is what Hyprland matches window rules against, so a web app can be
+# given its own workspace or float rule later like any other application.
+write_desktop "$DESKTOP" "$NAME" \
+  "$BROWSER --app=$URL --class=monarch-webapp-$SLUG --user-data-dir=$PROFILE" \
+  "$ICON_PATH" "Network;" \
+  "StartupWMClass=monarch-webapp-$SLUG" \
+  "Comment=$URL" \
+  "X-MonARCH-Webapp=$URL"
+
+ok "$NAME is in the launcher"
+step "own profile: ${PROFILE/#$HOME/\~}"
+printf '\n%sRemove it with: monarch webapp remove %s%s\n' "$C_DIM" "$SLUG" "$C_RESET"

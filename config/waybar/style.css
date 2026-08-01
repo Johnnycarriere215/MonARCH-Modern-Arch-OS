@@ -191,6 +191,20 @@ window#waybar.empty .modules-center {
 /* Never coloured by state: throughput being high is what a network is for. */
 #network.throughput { color: @fg_dim; }
 
+/* The update icon is only there when there IS an update, so it is allowed to
+ * draw the eye — unlike the stats, which are present all the time. */
+#custom-update {
+  color: @accent;
+  padding: 0 10px;
+  margin: 4px 1px;
+  border-radius: 7px;
+}
+
+#custom-update:hover {
+  background-color: @surface;
+  color: @accent_alt;
+}
+
 /* ────────────────────────────────────────────────────────── taskbar ─── */
 
 /* Windows mode only — nothing places wlr/taskbar in the other modes, and a

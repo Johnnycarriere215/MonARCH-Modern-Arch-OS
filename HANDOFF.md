@@ -1,7 +1,7 @@
 # HANDOFF
 
 Written 2026-07-31, at the end of the session that finished T2.
-Updated 2026-07-31, at the end of the session that finished T6.
+Updated 2026-07-31, at the end of the session that finished T7 and T8 — the end of Phase 2.
 
 This file is a **pointer, not a summary.** It deliberately does not restate the
 project — `MONARCH.md` and `PROGRESS.md` do that, and a second copy of the same
@@ -27,28 +27,33 @@ The repo is at `github.com/Johnnycarriere215/MonARCH-Modern-Arch-OS`, branch
 
 ## Where the build actually is
 
-**Phase 1 is code-complete, T3 through T6 are done on top of it, and none of it
-has ever been run on Arch.**
+**Phases 1 and 2 are code-complete. None of it has ever been run on Arch.**
 
 T1 (bootstrap), T2 (base config), T3 (theme engine), T4 (keybinds), T5 (Waybar
-stats) and T6 (modes) are all written, all locally verified, all marked `DONE`
-with the criteria that need real hardware honestly left unticked — chief among
-them: *the VM boots to a Hyprland desktop, logs in, and opens a terminal.*
+stats), T6 (modes), T7 (updates) and T8 (installers) are all written, all
+locally verified, all marked `DONE` with the criteria that need real hardware
+honestly left unticked — chief among them: *the VM boots to a Hyprland desktop,
+logs in, and opens a terminal*, and *a deliberately broken update has been
+rolled back from a snapshot*.
 
 Everything written so far has been tested by simulation — fake `HOME`
 directories, syntax checks, install stages replayed twice against a throwaway
 home, mechanical validation that every theme variable resolves. None of it has
 met a real Arch install.
 
-Every handoff since T2 has said the next thing to happen should be the VM test.
-It has not happened once. **Six tasks now sit on a desktop that has never
-booted**, and the unverifiable pieces keep accumulating: Walker's theming, VS
-Code's theming, every keybinding, the bar's idle CPU cost, and now hyprbars —
-a plugin that is known to break on every Hyprland update and whose failure path
-is the single most fragile thing in the project.
+**There is nothing sensible left to build.** The task list says, in as many
+words, *stop here and live in it for a week* before Phase 3 — and what annoys
+you that week is supposed to reshape the GUI before it is built. That week
+cannot start until the desktop boots.
 
-No version of Hyprland has parsed a single line MonARCH generates. The config
-is now four generated files deep and two of them are fatal if absent.
+Every handoff since T2 has said the next thing should be the VM test. It has
+not happened once, and eight tasks now sit on a desktop that has never booted.
+The unverifiable list: Walker's theming, VS Code's theming, every keybinding,
+the bar's idle CPU budget, hyprbars and the windows-mode fallback, and now the
+rollback — T7's one honestly-unticked criterion, which is the safety net for
+every future update and has never been pulled.
+
+No version of Hyprland has parsed a single line MonARCH generates.
 
 `docs/07-VM-TESTING.md` is the whole procedure, start to finish.
 
@@ -159,6 +164,15 @@ being empty is the proof, not an omission.
 Everything a mode does is in `modes/<name>/`. `requires` and `fallback` in its
 `meta.toml` are how hyprbars is handled without a single line of code knowing
 what hyprbars is. **Keep it that way** — golden rule 4.
+
+**Updates snapshot first, always.** `monarch update`'s eight steps are ordered
+for reasons written into the file — snapshot before pull, migrations after
+pacman, hyprpm after pacman, config apply last. The snapshot is `--required`:
+if it cannot be taken, the update does not start.
+
+**GitHub's rate limit shapes the update check.** 60 requests/hour/IP,
+unauthenticated, shared across a NAT. The bar reads a 30-minute cache; only the
+cache talks to GitHub. Both intervals are floors, not suggestions.
 
 **The keymap.** `schema/keybinds.toml` is the source of truth;
 `~/.config/monarch/keybinds.toml` overrides it if it exists. `monarch keys

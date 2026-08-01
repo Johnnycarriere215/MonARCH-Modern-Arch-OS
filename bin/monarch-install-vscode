@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+#DESC: Install and configure VS Code
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Install VS Code and configure it for MonARCH.
+
+Usage:
+  monarch install vscode [--configure-only]
+
+Beyond installing the package it sets three things in argv.json / settings.json:
+
+  password-store=gnome-libsecret   without this, every GitHub and Copilot login
+                                   is forgotten when you close the editor —
+                                   VS Code falls back to an in-memory store it
+                                   never tells you about
+  update.mode=none                 pacman owns this package. VS Code's own
+                                   updater cannot write to /opt and produces a
+                                   nag it can never satisfy
+  workbench.colorTheme=MonARCH     the theme extension T3 generates, so the
+                                   editor follows `monarch theme apply`
+
+settings.json is edited with a light touch: only these keys, only when absent
+or wrong, and your file is copied to settings.json.bak first.
+END
+}
+
+CONFIGURE_ONLY=false
+case "${1:-}" in
+  -h|--help)        usage; exit 0 ;;
+  --configure-only) CONFIGURE_ONLY=true ;;
+  "") ;;
+  *) err "unknown argument: $1"; exit 1 ;;
+esac
+
+VSCODE_DIR="$MONARCH_CONFIG_DIR/Code/User"
+ARGV_JSON="$MONARCH_CONFIG_DIR/Code/User/argv.json"
+SETTINGS_JSON="$VSCODE_DIR/settings.json"
+
+info "VS Code"
+
+if [[ "$CONFIGURE_ONLY" == false ]]; then
+  # visual-studio-code-bin is Microsoft's build with the marketplace and the
+  # proprietary bits; code-oss has neither and breaks Copilot. Locked decision
+  # in MONARCH.md is "VS Code", which means this one.
+  aur_install visual-studio-code-bin "VS Code" || exit 1
+fi
+
+# ------------------------------------------------------------------ keyring ---
+
+# argv.json is JSON-with-comments and VS Code rewrites it, so a whole-file
+# template would fight with the editor. Add the one key if it is not there.
+mkdir -p "$(dirname "$ARGV_JSON")"
+if [[ -f "$ARGV_JSON" ]] && grep -q 'password-store' "$ARGV_JSON"; then
+  ok "keyring already configured (password-store)"
+else
+  [[ -f "$ARGV_JSON" ]] && cp -a "$ARGV_JSON" "$ARGV_JSON.bak"
+  if [[ -f "$ARGV_JSON" ]] && grep -q '^\s*{' "$ARGV_JSON"; then
+    # Insert after the opening brace rather than rewriting the file.
+    tmp=$(mktemp)
+    awk '!done && /^[[:space:]]*\{/ {
+           print; print "  \"password-store\": \"gnome-libsecret\","; done = 1; next
+         } { print }' "$ARGV_JSON" >"$tmp"
+    cat "$tmp" >"$ARGV_JSON"; rm -f "$tmp"
+  else
+    printf '{\n  // Written by: monarch install vscode\n  "password-store": "gnome-libsecret"\n}\n' \
+      >"$ARGV_JSON"
+  fi
+  ok "keyring: gnome-libsecret"
+  step "without this, every GitHub and Copilot sign-in is lost on exit"
+fi
+
+# ----------------------------------------------------------------- settings ---
+
+# No JSON parser here (golden rule 6), so this is line-oriented and deliberately
+# conservative: it adds a key only when the key is absent entirely, and never
+# tries to change one you have set yourself.
+add_setting() {
+  local key=$1 value=$2 why=$3
+
+  if [[ -f "$SETTINGS_JSON" ]] && grep -q "\"$key\"" "$SETTINGS_JSON"; then
+    ok "$key is already set — leaving yours alone"
+    return 0
+  fi
+
+  mkdir -p "$VSCODE_DIR"
+  if [[ ! -f "$SETTINGS_JSON" ]]; then
+    printf '{\n  "%s": %s\n}\n' "$key" "$value" >"$SETTINGS_JSON"
+  else
+    cp -a "$SETTINGS_JSON" "$SETTINGS_JSON.bak"
+    local tmp; tmp=$(mktemp)
+    awk -v k="$key" -v v="$value" '
+      !done && /^[[:space:]]*\{/ {
+        print; printf "  \"%s\": %s,\n", k, v; done = 1; next
+      } { print }' "$SETTINGS_JSON" >"$tmp"
+    cat "$tmp" >"$SETTINGS_JSON"; rm -f "$tmp"
+  fi
+  ok "$key = $value"
+  step "$why"
+}
+
+add_setting "update.mode" '"none"' \
+  "pacman owns this package; VS Code cannot write to /opt and would nag forever"
+
+# T3 generates ~/.vscode/extensions/monarch-theme/ and cannot select it — that
+# needs settings.json, which needs a JSON parser to merge safely. This is the
+# installer that already has to touch the file, so it does it here. The theme
+# extension is always called "MonARCH"; its palette changes underneath.
+add_setting "workbench.colorTheme" '"MonARCH"' \
+  "follows 'monarch theme apply' — the extension name never changes, its colours do"
+
+printf '\n'
+if [[ -d "$HOME/.vscode/extensions/monarch-theme" ]]; then
+  ok "the MonARCH theme extension is present"
+else
+  warn "the MonARCH theme extension is not generated yet"
+  step "run: monarch theme apply \$(monarch theme current)"
+fi

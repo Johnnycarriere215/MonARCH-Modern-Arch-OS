@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#DESC: Install GitHub Desktop
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Install GitHub Desktop.
+
+Usage:
+  monarch install github-desktop
+
+Not redistributable, so it is never bundled in the ISO (golden rule 7) — this
+fetches it on your machine at install time.
+END
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  "") ;;
+  *) err "unknown argument: $1"; exit 1 ;;
+esac
+
+aur_install github-desktop-bin "GitHub Desktop"

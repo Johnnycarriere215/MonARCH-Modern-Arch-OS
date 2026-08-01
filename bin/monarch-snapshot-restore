@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+#DESC: Roll the root filesystem back to a snapshot
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+
+usage() {
+  cat <<'EOF'
+Roll / back to a snapshot.
+
+Usage:
+  monarch snapshot restore <number> [--yes]
+
+Read this before using it
+
+  This uses `snapper rollback`, which does NOT change the running system. It
+  makes the snapshot the default subvolume and takes effect at the next boot.
+  Nothing you do after running it is preserved.
+
+  The safer route, and the one MonARCH recommends, is the Limine boot menu:
+  reboot, pick the snapshot, and look around before committing to it. Limine is
+  configured for exactly this. Use that unless you already know you want this.
+
+  Your home directory is NOT rolled back. Snapper's 'root' config covers / and
+  home is a separate subvolume — which is usually what you want after a bad
+  update, and is a nasty surprise if you assumed otherwise.
+EOF
+}
+
+NUM=""
+ASSUME_YES=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    -y|--yes)  ASSUME_YES=true ;;
+    -*) err "unknown option: $1"; exit 1 ;;
+    *)  [[ -z "$NUM" ]] || die "one snapshot at a time"; NUM=$1 ;;
+  esac
+  shift
+done
+
+[[ -n "$NUM" ]] || { err "which snapshot?"; printf '\n'; usage >&2; exit 1; }
+[[ "$NUM" =~ ^[0-9]+$ ]] || die "'$NUM' is not a snapshot number — see: monarch snapshot list"
+
+have snapper || die "snapper is not installed"
+snapper -c root list >/dev/null 2>&1 || die "snapper has no 'root' config"
+
+snapper -c root list | awk -v n="$NUM" '$1 == n { found = 1 } END { exit !found }' \
+  || die "there is no snapshot #$NUM"
+
+printf '\n'
+snapper -c root list | awk -v n="$NUM" 'NR<=2 || $1 == n'
+printf '\n'
+
+loud "This makes #$NUM the default subvolume from the NEXT BOOT."
+printf '  Anything you change between now and then is lost.\n' >&2
+printf '  Your home directory is not affected.\n\n' >&2
+printf '  Prefer the Limine boot menu if you have not looked at this snapshot yet:\n' >&2
+printf '  it boots one without committing to it.\n\n' >&2
+
+if [[ "$ASSUME_YES" == false ]]; then
+  printf 'Type the snapshot number again to confirm: '
+  read -r reply
+  [[ "$reply" == "$NUM" ]] || { info "left alone"; exit 0; }
+fi
+
+sudo snapper -c root rollback "$NUM" || die "rollback failed"
+
+ok "#$NUM is the default subvolume from the next boot"
+loud "Reboot to land in it."

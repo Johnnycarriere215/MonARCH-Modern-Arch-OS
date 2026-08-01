@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#DESC: Switch between the stable and dev update channels
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+
+usage() {
+  cat <<'EOF'
+Choose which MonARCH you track.
+
+Usage:
+  monarch channel set stable|dev
+  monarch channel set              show the current channel
+
+  stable   released tags. What you want unless you are working on MonARCH
+  dev      the main branch, as it is. Expect things to be broken
+
+Switching writes update_channel to settings.toml and changes which git ref
+`monarch update` pulls. It does not update anything by itself — run
+`monarch update` afterwards.
+
+Going from dev back to stable can mean moving BACKWARDS to the last release.
+That is what stable means, and it is worth knowing before you do it.
+EOF
+}
+
+SETTINGS="$MONARCH_CONFIG_DIR/monarch/settings.toml"
+
+current() {
+  local value=""
+  [[ -f "$SETTINGS" ]] && value=$(sed -n \
+    's/^[[:space:]]*update_channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$SETTINGS" | head -n1)
+  printf '%s' "${value:-stable}"
+}
+
+main() {
+  case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    "")
+      printf '%s\n' "$(current)"
+      exit 0
+      ;;
+    stable|dev) ;;
+    *) err "channel must be 'stable' or 'dev', not '$1'"; exit 1 ;;
+  esac
+
+  local want=$1 now
+  now=$(current)
+
+  if [[ "$want" == "$now" ]]; then
+    ok "already on $want"
+    exit 0
+  fi
+
+  [[ -f "$SETTINGS" ]] || die "no settings.toml — run 'monarch config apply' first"
+
+  local tmp; tmp=$(mktemp)
+  awk -v v="$want" '
+    !done && /^[[:space:]]*update_channel[[:space:]]*=/ {
+      print "update_channel = \"" v "\""; done = 1; next
+    }
+    { print }
+  ' "$SETTINGS" >"$tmp"
+  cat "$tmp" >"$SETTINGS"
+  rm -f "$tmp"
+
+  ok "channel: $now -> $want"
+
+  if [[ "$want" == "dev" ]]; then
+    loud "dev is the main branch as it is. It is not tested before it lands."
+  else
+    loud "stable follows released tags — the next update may move you BACKWARDS"
+    printf '  to the last release. A snapshot is taken first either way.\n' >&2
+  fi
+
+  printf '\n%sRun: monarch update%s\n' "$C_DIM" "$C_RESET"
+}
+
+main "$@"

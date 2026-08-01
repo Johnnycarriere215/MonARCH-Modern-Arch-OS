@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#DESC: Install Claude Desktop
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Install Claude Desktop.
+
+Usage:
+  monarch install claude-desktop [--check]
+
+  --check   report readiness and install nothing
+
+The AUR package repackages Anthropic's official Linux .deb — MonARCH does not
+redistribute it (golden rule 7), it fetches it on your machine at install time.
+
+Two things it needs beyond the package, both locked decisions:
+
+  CLAUDE_USE_WAYLAND=1   already set in config/hypr/monarch.conf, so it applies
+                         to everything the session launches. Without it the app
+                         runs under XWayland: blurry, with a blank titlebar.
+
+  /dev/kvm               Cowork fails SILENTLY without it. No error, the
+                         features simply are not there. Checked below.
+END
+}
+
+CHECK_ONLY=false
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --check)   CHECK_ONLY=true ;;
+  "")        ;;
+  *) err "unknown argument: $1"; exit 1 ;;
+esac
+
+info "Claude Desktop"
+
+kvm_ok=true
+check_kvm || kvm_ok=false
+
+# The env var lives in the Hyprland config so it covers everything the session
+# starts, not just a launch from a terminal. Verify rather than set: two places
+# setting the same variable is how they end up disagreeing.
+if grep -qs 'CLAUDE_USE_WAYLAND' "$MONARCH_CONFIG_DIR/hypr/monarch.conf"; then
+  ok "CLAUDE_USE_WAYLAND is set for the session (config/hypr/monarch.conf)"
+else
+  warn "CLAUDE_USE_WAYLAND is not in ~/.config/hypr/monarch.conf"
+  step "run 'monarch config apply' — it belongs there, not in a wrapper script"
+fi
+
+if [[ "$CHECK_ONLY" == true ]]; then
+  [[ "$kvm_ok" == true ]] && exit 0 || exit 1
+fi
+
+if [[ "$kvm_ok" == false ]]; then
+  loud "Installing anyway — the app will run, but Cowork will not work."
+  printf '\n'
+fi
+
+aur_install claude-desktop "Claude Desktop"

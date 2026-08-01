@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#DESC: Remove a package and anything only it needed
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Remove a package.
+
+Usage:
+  monarch pkg drop <name>... [--yes]
+
+Uses pacman -Rns: the package, its configuration, and any dependency nothing
+else needs. pacman refuses if something else depends on it, which is the
+behaviour you want.
+
+It will NOT let you remove a package MonARCH's own manifests list — those are
+what makes the desktop work. Edit packages/base.packages if you really mean it.
+END
+}
+
+ASSUME_YES=false
+PKGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    -y|--yes)  ASSUME_YES=true ;;
+    -*) err "unknown option: $1"; exit 1 ;;
+    *)  PKGS+=("$1") ;;
+  esac
+  shift
+done
+
+[[ ${#PKGS[@]} -gt 0 ]] || { err "drop what?"; printf '\n'; usage >&2; exit 1; }
+require_arch
+
+# Removing waybar or hyprland with one command should not be easy. The manifest
+# is the list of things the desktop is made of.
+base="$MONARCH_HOME/packages/base.packages"
+for pkg in "${PKGS[@]}"; do
+  if [[ -f "$base" ]] && sed 's/#.*//' "$base" | grep -qx "[[:space:]]*$pkg[[:space:]]*"; then
+    err "$pkg is in packages/base.packages — MonARCH needs it"
+    printf '\n  If you are sure, remove it from that manifest first, or use pacman\n' >&2
+    printf '  directly. An update would reinstall it otherwise.\n' >&2
+    exit 1
+  fi
+done
+
+args=(-Rns)
+[[ "$ASSUME_YES" == true ]] && args+=(--noconfirm)
+sudo pacman "${args[@]}" "${PKGS[@]}"

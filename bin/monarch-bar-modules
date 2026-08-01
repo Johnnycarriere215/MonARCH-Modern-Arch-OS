@@ -48,6 +48,7 @@ ACTIVE_LINK="$WAYBAR_DIR/modules-active.jsonc"
 # What ships. `reset` goes back to this, and it is the fallback when
 # settings.toml has no bar_modules key yet.
 DEFAULT_MODULES=(
+  custom/update
   cpu memory custom/gpu network#throughput disk
   tray bluetooth network wireplumber battery clock
 )
@@ -57,6 +58,7 @@ DEFAULT_MODULES=(
 expand_alias() {
   case "$1" in
     gpu)             printf 'custom/gpu' ;;
+    update|updates)  printf 'custom/update' ;;
     netio|net-io|throughput) printf 'network#throughput' ;;
     net)             printf 'network' ;;
     audio|volume)    printf 'wireplumber' ;;
@@ -329,6 +331,7 @@ main() {
       for m in "${enabled[@]}"; do
         case "$m" in
           cpu|memory|custom/gpu|network#throughput|disk) ;;
+          custom/update) perf+=("$m") ;;
           *) perf+=("$m") ;;
         esac
       done

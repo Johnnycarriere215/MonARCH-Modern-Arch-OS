@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+#DESC: Run any migrations that have not run yet
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+export MONARCH_HOME
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+
+usage() {
+  cat <<'EOF'
+Run the migrations that have not run on this machine yet.
+
+Usage:
+  monarch migrate [--dry-run] [--list] [--mark-all-run]
+
+  --dry-run        say what would run, run nothing
+  --list           every migration and whether it has run
+  --mark-all-run   record them all as done WITHOUT running them
+
+Migrations live in migrations/<unix-timestamp>.sh and run in timestamp order,
+once each. What has run is recorded in
+~/.local/state/monarch/migrations-run — a file of timestamps, one per line.
+
+`monarch update` runs this. Running it by hand is safe: a migration that has
+already run is skipped, and every migration is written to be idempotent anyway.
+
+--mark-all-run is for a FRESH install, where the shipped configuration is
+already current and there is nothing to migrate from. bootstrap.sh uses it.
+Using it on an existing machine skips fixes you need.
+EOF
+}
+
+STATE="$MONARCH_STATE_DIR/migrations-run"
+MIGRATIONS="$MONARCH_HOME/migrations"
+
+DRY_RUN=false
+LIST=false
+MARK_ALL=false
+
+has_run() {
+  [[ -f "$STATE" ]] || return 1
+  grep -qx "$1" "$STATE"
+}
+
+mark_run() {
+  mkdir -p "$MONARCH_STATE_DIR"
+  printf '%s\n' "$1" >>"$STATE"
+}
+
+# Timestamp order, which is also the order they were written — a migration may
+# depend on an earlier one having run. Sorting the bare filenames numerically
+# rather than the full paths keeps this right regardless of where the checkout
+# lives.
+each_migration() {
+  [[ -d "$MIGRATIONS" ]] || return 0
+  local name
+  while IFS= read -r name; do
+    printf '%s/%s\n' "$MIGRATIONS" "$name"
+  done < <(find "$MIGRATIONS" -maxdepth 1 -name '*.sh' -type f -printf '%f\n' | sort -n)
+}
+
+describe() {
+  local line
+  line=$(grep -m1 '^#DESC:' "$1" 2>/dev/null || true)
+  if [[ -n "$line" ]]; then
+    printf '%s' "${line#\#DESC:}" | sed 's/^[[:space:]]*//'
+  else
+    printf '%s' "-"
+  fi
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)      usage; exit 0 ;;
+      --dry-run)      DRY_RUN=true ;;
+      --list)         LIST=true ;;
+      --mark-all-run) MARK_ALL=true ;;
+      *) err "unknown argument: $1"; printf '\n'; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+
+  mkdir -p "$MONARCH_STATE_DIR"
+
+  local files=() f
+  while IFS= read -r f; do [[ -n "$f" ]] && files+=("$f"); done < <(each_migration)
+
+  if [[ ${#files[@]} -eq 0 ]]; then
+    [[ "$LIST" == true ]] && { info "no migrations exist"; exit 0; }
+    ok "nothing to migrate"
+    exit 0
+  fi
+
+  # ---- list ---------------------------------------------------------------
+  if [[ "$LIST" == true ]]; then
+    local stamp
+    for f in "${files[@]}"; do
+      stamp=$(basename "$f" .sh)
+      if has_run "$stamp"; then
+        printf ' %sran%s %s  %s%s%s\n' "$C_GREEN" "$C_RESET" "$stamp" \
+          "$C_DIM" "$(describe "$f")" "$C_RESET"
+      else
+        printf ' %snew%s %s  %s\n' "$C_YELLOW" "$C_RESET" "$stamp" "$(describe "$f")"
+      fi
+    done
+    exit 0
+  fi
+
+  # ---- mark without running ------------------------------------------------
+  if [[ "$MARK_ALL" == true ]]; then
+    local n=0
+    for f in "${files[@]}"; do
+      local stamp; stamp=$(basename "$f" .sh)
+      has_run "$stamp" || { mark_run "$stamp"; n=$((n + 1)); }
+    done
+    ok "$n migration(s) recorded as run without running"
+    exit 0
+  fi
+
+  # ---- run -----------------------------------------------------------------
+  local pending=()
+  for f in "${files[@]}"; do
+    has_run "$(basename "$f" .sh)" || pending+=("$f")
+  done
+
+  if [[ ${#pending[@]} -eq 0 ]]; then
+    ok "up to date — ${#files[@]} migration(s), all run"
+    exit 0
+  fi
+
+  info "${#pending[@]} migration(s) to run"
+
+  local failed=0
+  for f in "${pending[@]}"; do
+    local stamp; stamp=$(basename "$f" .sh)
+
+    if [[ "$DRY_RUN" == true ]]; then
+      step "would run $stamp — $(describe "$f")"
+      continue
+    fi
+
+    step "$stamp — $(describe "$f")"
+
+    # A migration is recorded as run ONLY if it succeeded. A failed one is
+    # retried on the next update, which is why they are all written to be
+    # idempotent — half-completing and then re-running is the normal case.
+    if bash "$f"; then
+      mark_run "$stamp"
+    else
+      err "migration $stamp failed"
+      failed=$((failed + 1))
+      # Stop rather than continue: a later migration may assume this one ran.
+      break
+    fi
+  done
+
+  if [[ $failed -gt 0 ]]; then
+    err "stopped after a failed migration — it will be retried next time"
+    exit 1
+  fi
+
+  [[ "$DRY_RUN" == true ]] && exit 0
+  ok "migrations done"
+}
+
+main "$@"

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#DESC: List Btrfs snapshots
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+
+usage() {
+  cat <<'EOF'
+List the snapshots of /.
+
+Usage:
+  monarch snapshot list [--mine]
+
+  --mine   only snapshots MonARCH took
+
+The number in the first column is what you pick at the Limine boot menu, and
+what `monarch snapshot restore <n>` takes.
+EOF
+}
+
+MINE=false
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --mine)    MINE=true ;;
+  "")        ;;
+  *) err "unknown argument: $1"; exit 1 ;;
+esac
+
+have snapper || die "snapper is not installed"
+snapper -c root list >/dev/null 2>&1 || die "snapper has no 'root' config"
+
+if [[ "$MINE" == true ]]; then
+  # Everything monarch-snapshot-create writes carries 'monarch' in its
+  # description, either from the default or from what update passed in.
+  snapper -c root list | awk 'NR<=2 || /monarch/'
+else
+  snapper -c root list
+fi
+
+if [[ -s "$MONARCH_STATE_DIR/last-snapshot" ]]; then
+  printf '\n%sLast one MonARCH took: #%s%s\n' \
+    "$C_DIM" "$(<"$MONARCH_STATE_DIR/last-snapshot")" "$C_RESET"
+fi
