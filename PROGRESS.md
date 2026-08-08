@@ -247,6 +247,10 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 - **AppImages are explicitly untracked**, and the command says so after installing one: nothing upgrades it, `monarch update` will never touch it. It also checks for FUSE, whose absence produces a `dlopen(): libfuse.so.2` error that says nothing useful.
 - **Web apps get `--class=monarch-webapp-<slug>`**, so Hyprland window rules can target one like any other application — a per-webapp workspace or float rule is a line in `windows.conf`. Icons come from Google's favicon service, which handles sites that put theirs somewhere non-standard; a generic icon is the fallback and is not an error.
 - **`monarch webapp remove` keeps the browser profile unless `--purge`.** Re-adding leaves you signed in, which is usually what is wanted.
+- **The editor is now MonARCH Code, not VS Code** — a locked decision changed by the human, recorded in `MONARCH.md`. `monarch install monarch-code` builds it from source (Rust + Node + Tauri, 10–20 min first time) because the only published artifact is a `.deb`, which on Arch means debtap and a package pacman cannot own. `visual-studio-code-bin` moved from `aur.packages` to `optional.packages`; `monarch install vscode` still works and still sets the theme.
+- **MonARCH Code needed a theme bridge.** It searches `~/.config/monarch/themes`, `/usr/share/monarch/themes`, `/usr/local/share/monarch/themes`, `/opt/monarch/themes` — and MonARCH installs to `~/.local/share/monarch`, which is none of them. The installer symlinks `$MONARCH_HOME/themes` → `/usr/share/monarch/themes`, so the three shipped themes are visible and `monarch update` pulling a new one needs no further step. `--link-themes-only` does just that part.
+- **No theme template for the editor, deliberately.** It parses `colors.toml` itself in Rust, so it follows `monarch theme apply` natively — unlike VS Code, which needs a generated extension. Adding a template would create a second renderer for the same palette.
+- **Flagged for the MonARCH Code repo, not fixed here:** `src-tauri/src/commands/theme.rs` shells out to `monarch theme apply` (correct, golden rule 1) but on failure falls back to rendering `hypr-colors.conf` and `waybar-colors.css` **itself**. That is a second renderer for files `themes/_templates/` owns, and the two will drift. The fallback should report the failure instead of writing.
 - **Spotify's PKGBUILD needs a signing key** imported first or the build fails with a gpg error that reads like a broken package. The installer imports it unconditionally — `gpg --import` is idempotent, and checking would mean hardcoding a key id Spotify rotates.
 
 > **Stop here and live in it for a week** before Phase 3. What annoys you that week should reshape the GUI before it's built.
@@ -340,7 +344,7 @@ These need the EliteBook, not the VM.
 - [ ] Run `whoami` — the backup command failed because the username was guessed wrong
 - [ ] Run `lsblk` with the USB drive **plugged in** (last run showed only the internal NVMe)
 - [ ] Fill in the baseline measurement table in `docs/02-HARDWARE.md`
-- [ ] ASCII crown art → `brand/`
+- [x] ~~ASCII crown art → `brand/`~~ — `brand/monarch.ascii`, the bloody-figlet wordmark. The installer prints it, and skips it outside a UTF-8 locale where it would come out as tofu
 - [ ] Three theme palettes — your own colors. **T3 shipped originals as a starting point** (`midnight`, `parchment`, `harbor`); replacing one is editing `themes/<name>/colors.toml` and running `monarch theme apply <name>`, nothing else
 - [ ] Wallpapers, if you want any: drop them in `themes/<name>/backgrounds/` and **fill in the licence table in that directory's README before committing one**
 - [ ] **Never wipe the internal NVMe before Phase 4**

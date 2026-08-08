@@ -7,7 +7,6 @@
 # these one at a time and warns on failure rather than aborting the install.
 
 walker-bin                    # launcher. Not in the official repos, hence AUR
-visual-studio-code-bin        # locked decision: VS Code is the editor
 github-desktop-bin
 nwg-displays                  # GUI monitor arrangement, writes monitors.conf
 claude-desktop                # needs CLAUDE_USE_WAYLAND=1 and /dev/kvm — see T8

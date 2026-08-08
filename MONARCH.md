@@ -93,7 +93,7 @@ packages/     base.packages, optional.packages, aur.packages
 install/      staged install scripts, called by bootstrap.sh
 migrations/   timestamped one-shot upgrade scripts
 gui/          Tauri app
-brand/        ASCII art, Plymouth, greetd theme
+brand/        monarch.ascii wordmark, Plymouth, greetd theme
 docs/         project documentation. 09-ARCH-INSTALL.md = install base Arch,
               07-VM-TESTING.md = test in a VM, 08-USB-INSTALL.md = daily-drive it
               from an external drive without touching the internal disk
@@ -110,7 +110,7 @@ MONARCH.md     this file
 | | |
 |---|---|
 | Name / CLI | MonARCH / `monarch` |
-| Editor | VS Code |
+| Editor | **MonARCH Code** — our own, Tauri + Monaco. VS Code is a one-command installer |
 | Browser | Chromium ships; Chrome is a one-click installer |
 | AI | Claude Desktop (AUR `claude-desktop`), needs `CLAUDE_USE_WAYLAND=1` and `/dev/kvm` |
 | Workspaces | 5 default; `Super+6` creates a 6th on demand, destroyed when empty |

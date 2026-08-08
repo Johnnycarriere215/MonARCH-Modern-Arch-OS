@@ -45,7 +45,7 @@ mod     = "SUPER"
 term    = "alacritty"
 browser = "chromium"
 files   = "nautilus"
-editor  = "code"
+editor  = "monarch-code"
 
 # ══════════════════════════════════════════════════════════════════ launcher ══
 #

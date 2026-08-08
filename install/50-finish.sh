@@ -8,6 +8,18 @@
 # shellcheck source=/dev/null
 source "$MONARCH_HOME/install/_common.sh"
 
+# The wordmark, if the terminal can render it. brand/monarch.ascii is drawn
+# with block and shade characters (█ ▓ ▒ ░), which a console font without full
+# box-drawing coverage turns into a rectangle of tofu — worse than no banner at
+# all. UTF-8 locale is the cheap proxy for "this will probably look right".
+stage_50_banner() {
+  local art="$MONARCH_HOME/brand/monarch.ascii"
+  [[ -r "$art" ]] || return 0
+  [[ "${LANG:-}${LC_ALL:-}" == *[Uu][Tt][Ff]* ]] || return 0
+  printf '\n'
+  cat "$art"
+}
+
 stage_50_summary() {
   local version="unknown"
   [[ -r "$MONARCH_HOME/version" ]] && version=$(<"$MONARCH_HOME/version")
@@ -23,6 +35,13 @@ stage_50_summary() {
    CLI           monarch          (try: monarch doctor)
 
    Next boot brings up greetd. Pick Hyprland and log in.
+
+   Super           launcher
+   Super+Return    terminal
+   Super+/         every keybinding
+
+   The editor is not installed yet — it builds from source:
+     monarch install monarch-code
 
 EOF
 }
@@ -63,6 +82,7 @@ stage_50_reboot_prompt() {
 }
 
 stage_50_finish() {
+  stage_50_banner
   stage_50_summary
   stage_50_doctor
   stage_50_reboot_prompt

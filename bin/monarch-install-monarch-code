@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+#DESC: Install MonARCH Code, the editor
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_install-lib.sh"
+
+usage() {
+  cat <<'END'
+Install MonARCH Code — MonARCH's own editor.
+
+Usage:
+  monarch install monarch-code [--source] [--link-themes-only]
+
+  --source             build from source even if a package is available
+  --link-themes-only   only wire up theme discovery, install nothing
+
+What it is
+
+  A Tauri editor built on Monaco — the same editor core VS Code uses — with
+  xterm.js for the terminal. Not Electron: about 40MB idle against VS Code's
+  150MB+. Explorer, tabs, command palette, search, git, extensions.
+
+  https://github.com/Johnnycarriere215/MonARCH-Code
+
+Why it is the default
+
+  It reads MonARCH's themes natively. `monarch theme apply harbor` and the
+  editor changes with everything else, because it parses the same colors.toml
+  the rest of the desktop is rendered from — no extension, no second palette.
+
+  VS Code is still one command away: monarch install vscode
+
+Building takes a while
+
+  There is no Arch package yet, and the published release is a .deb, which on
+  Arch means debtap and a package pacman cannot properly own. So this builds
+  from source: Rust, Node and the Tauri toolchain. Ten to twenty minutes on
+  this hardware, most of it compiling Rust dependencies once.
+END
+}
+
+SOURCE_ONLY=false
+LINK_ONLY=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)           usage; exit 0 ;;
+    --source)            SOURCE_ONLY=true ;;
+    --link-themes-only)  LINK_ONLY=true ;;
+    *) err "unknown argument: $1"; exit 1 ;;
+  esac
+  shift
+done
+
+REPO="https://github.com/Johnnycarriere215/MonARCH-Code"
+SRC_DIR="$HOME/.local/share/monarch-code-src"
+
+# --------------------------------------------------------------- theme bridge ---
+
+# MonARCH Code looks for themes in a fixed set of paths, and the repo checkout
+# is not one of them — it searches ~/.config/monarch/themes, then
+# /usr/share/monarch/themes, /usr/local/share/monarch/themes, /opt/monarch/themes.
+#
+# MonARCH installs itself to ~/.local/share/monarch, so without this the editor
+# finds only the themes the user has installed by hand and none of the three
+# that ship. Symlinking the repo's themes/ into the first system path it checks
+# closes that, and because it is a link rather than a copy, `monarch update`
+# pulling a new theme makes it visible to the editor with no further step.
+link_themes() {
+  local target="/usr/share/monarch/themes"
+  local source="$MONARCH_HOME/themes"
+
+  [[ -d "$source" ]] || { warn "no themes/ in $MONARCH_HOME"; return 1; }
+
+  if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$source" ]]; then
+    ok "themes already visible to the editor"
+    return 0
+  fi
+
+  if [[ -e "$target" && ! -L "$target" ]]; then
+    warn "$target exists and is not a symlink — leaving it alone"
+    step "the editor will not see MonARCH's shipped themes"
+    return 1
+  fi
+
+  info "Making MonARCH's themes visible to the editor"
+  step "$target -> ${source/#$HOME/\~}"
+  sudo mkdir -p "$(dirname "$target")"
+  sudo ln -sfn "$source" "$target" || { warn "could not link themes"; return 1; }
+  ok "linked"
+}
+
+if [[ "$LINK_ONLY" == true ]]; then
+  link_themes
+  exit $?
+fi
+
+# ------------------------------------------------------------------- install ---
+
+info "MonARCH Code"
+
+if have monarch-code && [[ "$SOURCE_ONLY" == false ]]; then
+  ok "already installed — $(monarch-code --version 2>/dev/null || printf 'version unknown')"
+  link_themes || true
+  exit 0
+fi
+
+require_arch
+
+# Build dependencies. Node is a BUILD dependency for a Tauri GUI, which golden
+# rule 6 permits — the rule bars Node from the system layer, not from building
+# an application. None of this is needed at runtime.
+info "Build dependencies"
+deps=(git base-devel rust nodejs npm webkit2gtk-4.1 libappindicator-gtk3 librsvg)
+missing=()
+for d in "${deps[@]}"; do pkg_installed "$d" || missing+=("$d"); done
+
+if [[ ${#missing[@]} -gt 0 ]]; then
+  step "installing: ${missing[*]}"
+  sudo pacman -S --needed --noconfirm "${missing[@]}" \
+    || die "could not install build dependencies"
+else
+  ok "all present"
+fi
+
+# ---- fetch --------------------------------------------------------------------
+
+if [[ -d "$SRC_DIR/.git" ]]; then
+  info "Updating the source"
+  git -C "$SRC_DIR" pull --ff-only --quiet \
+    || warn "could not update — building what is already there"
+else
+  info "Fetching the source"
+  rm -rf "$SRC_DIR"
+  git clone --depth 1 "$REPO" "$SRC_DIR" || die "clone failed"
+fi
+
+# ---- build --------------------------------------------------------------------
+
+info "Building — this takes 10-20 minutes the first time"
+step "most of it is Rust dependencies, and they are cached for next time"
+
+cd "$SRC_DIR"
+
+npm install || die "npm install failed"
+
+# tauri-cli is not a project dependency in this repo, so use npx rather than
+# assuming a global install.
+npx --yes @tauri-apps/cli@latest build --bundles deb \
+  || die "the build failed — the output above says where"
+
+# ---- install ------------------------------------------------------------------
+
+# Tauri emits a .deb and an AppImage; on Arch the binary itself is the honest
+# thing to install, since neither bundle is a package pacman can own. Straight
+# into ~/.local/bin, which stage 30 already put on PATH.
+built=$(find "$SRC_DIR/src-tauri/target/release" -maxdepth 1 -type f -name 'monarch-code' 2>/dev/null | head -n1)
+[[ -n "$built" ]] || die "the build produced no binary at src-tauri/target/release"
+
+mkdir -p "$HOME/.local/bin"
+install -m 0755 "$built" "$HOME/.local/bin/monarch-code"
+ok "monarch-code -> ~/.local/bin"
+
+# ---- desktop entry ------------------------------------------------------------
+
+icon="$SRC_DIR/icons/128x128.png"
+if [[ -f "$icon" ]]; then
+  mkdir -p "$MONARCH_ICONS_DIR"
+  cp "$icon" "$MONARCH_ICONS_DIR/monarch-code.png"
+  icon="$MONARCH_ICONS_DIR/monarch-code.png"
+else
+  icon="text-editor"
+fi
+
+write_desktop "$MONARCH_APPS_DIR/monarch-code.desktop" \
+  "MonARCH Code" "$HOME/.local/bin/monarch-code %F" "$icon" \
+  "Development;TextEditor;IDE;" \
+  "StartupWMClass=MonARCH Code" \
+  "MimeType=text/plain;inode/directory;" \
+  "Comment=MonARCH's editor — follows the desktop theme"
+
+ok "in the launcher"
+
+link_themes || true
+
+printf '\n'
+ok "MonARCH Code installed"
+printf '  %sSuper+C opens it. It follows `monarch theme apply` on its own.%s\n' \
+  "$C_DIM" "$C_RESET"

@@ -39,3 +39,8 @@ transmission-gtk
 # is a proxy, not a measurement. Needs CAP_PERFMON or perf_event_paranoid <= 1
 # to read anything as a normal user.
 intel-gpu-tools
+
+# The editor is MonARCH Code (`monarch install monarch-code`) — built from
+# source, since the only published artifact is a .deb. VS Code stays one
+# command away for anyone who wants it: `monarch install vscode`.
+visual-studio-code-bin
