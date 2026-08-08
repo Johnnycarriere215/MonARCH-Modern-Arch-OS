@@ -107,7 +107,14 @@ main() {
 
   ok "$NAME for this session — saved default is still $(settings_mode 2>/dev/null || printf 'unset')"
 
-  [[ "$RELOAD" == true ]] && mode_reload
+  # if/fi, not `&&`: this is main's last statement, and `main "$@"` runs bare
+  # under `set -e`. With --no-reload the `&&` would return 1 and the command
+  # would exit non-zero despite having succeeded — which the GUI, shelling out
+  # to this, would read as a failure.
+  if [[ "$RELOAD" == true ]]; then
+    mode_reload
+  fi
+  return 0
 }
 
 main "$@"

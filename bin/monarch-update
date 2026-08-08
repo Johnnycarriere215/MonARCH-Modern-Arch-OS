@@ -134,7 +134,13 @@ step_pull() {
       || { warn "could not check out $ref"; return 0; }
   fi
 
-  [[ "$DRY_RUN" == false ]] && ok "MonARCH at $("$MONARCH_HOME/bin/monarch-version" --short 2>/dev/null || printf '?')"
+  # if/fi, not `&&` — this is the function's last statement and it is called
+  # bare under `set -e`. A trailing `[[ dry ]] && ok` returns 1 on a dry run,
+  # which set -e reads as step_pull failing and aborts the whole update at 2/8.
+  if [[ "$DRY_RUN" == false ]]; then
+    ok "MonARCH at $("$MONARCH_HOME/bin/monarch-version" --short 2>/dev/null || printf '?')"
+  fi
+  return 0
 }
 
 # ----------------------------------------------------------------- 3. pacman ---

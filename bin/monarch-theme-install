@@ -41,7 +41,10 @@ NAME=""
 FORCE=false
 APPLY=false
 
-cleanup() { [[ -n "${TMPDIR_CLONE:-}" ]] && rm -rf "$TMPDIR_CLONE"; }
+# return 0 is load-bearing: this runs as an EXIT trap under `set -e`, and a
+# trailing `&&` that evaluates false (the common case — no clone happened)
+# would replace a successful `exit 0` with exit 1.
+cleanup() { [[ -n "${TMPDIR_CLONE:-}" ]] && rm -rf "$TMPDIR_CLONE"; return 0; }
 trap cleanup EXIT
 
 main() {
