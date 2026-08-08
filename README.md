@@ -144,6 +144,7 @@ whichever one failed.
 | [`docs/09-ARCH-INSTALL.md`](docs/09-ARCH-INSTALL.md) | Base Arch, step by step. No prior knowledge assumed |
 | [`docs/07-VM-TESTING.md`](docs/07-VM-TESTING.md) | Test it in a VM — **do this first** |
 | [`docs/08-USB-INSTALL.md`](docs/08-USB-INSTALL.md) | Daily-drive it from an external drive, internal disk untouched |
+| [`docs/10-DUAL-BOOT.md`](docs/10-DUAL-BOOT.md) | Install beside Linux Mint on the internal drive, choose at boot |
 
 ## First keys
 

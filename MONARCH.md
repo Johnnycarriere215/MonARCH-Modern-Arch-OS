@@ -96,7 +96,8 @@ gui/          Tauri app
 brand/        monarch.ascii wordmark, Plymouth, greetd theme
 docs/         project documentation. 09-ARCH-INSTALL.md = install base Arch,
               07-VM-TESTING.md = test in a VM, 08-USB-INSTALL.md = daily-drive it
-              from an external drive without touching the internal disk
+              from an external drive, 10-DUAL-BOOT.md = alongside Mint on the
+              internal drive
 bootstrap.sh  one-command install onto fresh Arch
 
 START-HERE.md  session protocol for AI assistants
