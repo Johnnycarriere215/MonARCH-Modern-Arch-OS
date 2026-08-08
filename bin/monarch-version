@@ -11,6 +11,7 @@ Usage:
   monarch version [--short]
 
   --short   just the version string, nothing else
+  --logo    print the wordmark above it
 EOF
 }
 
@@ -27,10 +28,11 @@ resolve_home() {
 MONARCH_HOME=${MONARCH_HOME:-$(resolve_home)}
 
 main() {
-  local short=false
+  local short=false logo=false
   case "${1:-}" in
     -h|--help) usage; exit 0 ;;
     --short)   short=true ;;
+    --logo)    logo=true ;;
     "")        ;;
     *)         printf 'error: unknown argument: %s\n\n' "$1" >&2; usage >&2; exit 1 ;;
   esac
@@ -47,6 +49,13 @@ main() {
   if [[ "$short" == true ]]; then
     printf '%s\n' "$version"
     exit 0
+  fi
+
+  # Only with --logo: `monarch version` is something scripts read, and this
+  # command already prints machine-ish output below.
+  if [[ "$logo" == true ]] && [[ -r "$MONARCH_HOME/brand/monarch.ascii" ]]; then
+    cat "$MONARCH_HOME/brand/monarch.ascii"
+    printf '\n'
   fi
 
   printf 'MonARCH %s\n' "$version"

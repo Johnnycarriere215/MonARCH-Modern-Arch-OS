@@ -20,7 +20,15 @@ stage_40_greetd() {
 vt = 1
 
 [default_session]
-command = "tuigreet --time --remember --remember-user-session --asterisks --cmd Hyprland"
+# SINGLE quotes around the greeting, inside the double-quoted TOML value.
+# greetd tokenises this command shell-style, so single quotes group the phrase
+# without terminating the TOML string. Double quotes here produce invalid TOML
+# and a machine that boots to no login screen at all.
+#
+# One line only: tuigreet renders the greeting above the login box and clips
+# multi-line art rather than wrapping it. The full wordmark goes to /etc/issue
+# instead, which is what the TTYs show — see install/45-branding.sh.
+command = "tuigreet --greeting 'MonARCH — Arch Linux, made yours.' --time --remember --remember-user-session --asterisks --cmd Hyprland"
 user = "greeter"
 EOF
 
