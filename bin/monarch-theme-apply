@@ -150,8 +150,8 @@ apply_background() {
     2>/dev/null | sort | head -n1)
 
   if [[ -z "$image" ]]; then
-    # Expected, not a problem: MonARCH ships no wallpapers. Whatever is
-    # currently set stays set.
+    # Every shipped theme has wallpapers, so this is the case of a user theme
+    # with an empty backgrounds/ dir. Leave whatever is currently set.
     return 0
   fi
 

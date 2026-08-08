@@ -99,7 +99,7 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 - [x] Templates live in `themes/_templates/`, one file per app — eight templates (VS Code needs two, which is VS Code's shape, not the engine's)
 - [x] Adding a new app to the theme system = adding one template file, nothing else — the target and reload command are declared *in* the template's `#!` header; no registry, no code path names an application
 - [x] Three themes ship with **original** palettes — `midnight` (near-black, violet/brass), `parchment` (warm light, indigo), `harbor` (mid-contrast slate, teal/amber). Written for this project
-- [x] **No wallpaper files committed** — `themes/<name>/backgrounds/README.md` in all three, each with an empty licence table to fill in before any image is committed
+- [x] **No wallpaper files committed without a recorded licence** — originally shipped none; a later session added three per theme, generated from each palette by `brand/wallpapers/generate.py`, licence recorded as MIT (ours) in each `backgrounds/README.md`. The locked rule is honoured, not the stricter no-images reading
 
 **Notes:**
 
@@ -350,7 +350,7 @@ These need the EliteBook, not the VM.
 - [ ] Fill in the baseline measurement table in `docs/02-HARDWARE.md`
 - [x] ~~ASCII crown art → `brand/`~~ — `brand/monarch.ascii`, the bloody-figlet wordmark. The installer prints it, and skips it outside a UTF-8 locale where it would come out as tofu
 - [ ] Three theme palettes — your own colors. **T3 shipped originals as a starting point** (`midnight`, `parchment`, `harbor`); replacing one is editing `themes/<name>/colors.toml` and running `monarch theme apply <name>`, nothing else
-- [ ] Wallpapers, if you want any: drop them in `themes/<name>/backgrounds/` and **fill in the licence table in that directory's README before committing one**
+- [x] ~~Wallpapers~~ — three per theme now ship, generated from the palette (`brand/wallpapers/generate.py`), plus `monarch background pick`. Drop your own in `themes/<name>/backgrounds/` or `~/.config/monarch/backgrounds/`; record a licence before committing any
 - [ ] **Never wipe the internal NVMe before Phase 4**
 
 ---
@@ -374,3 +374,5 @@ DATE | TASK | OUTCOME | NOTES FOR NEXT SESSION
 ```
 
 2026-08-08 | review | 3 bugs fixed | Full bug sweep of the repo. All three were the same root cause — a trailing `&&`/short-circuit as the last command under `set -e`, which turns success into a non-zero exit. (1) `monarch update --dry-run` aborted at step 2/8 on a clean checkout: step_pull ended in `[[ dry ]] && ok`. (2) `monarch mode session <x> --no-reload` exited 1 despite succeeding — main ended in `[[ reload ]] && mode_reload`; matters because the GUI reads exit codes. (3) `monarch theme install <localdir>` (and `--help`) exited 1: the EXIT-trap cleanup ended in `[[ clone ]] && rm`. All now if/fi + return 0. No logic/parser bugs found; the TOML parsers, alias resolution, dispatcher and `$(())` counters are sound.
+
+2026-08-08 | wallpapers | shipped 9 + picker | Three wallpapers per theme (gradient / accent glow / aurora bands), generated from each palette by brand/wallpapers/generate.py (Pillow+numpy, JPEG q90, ~480KB each, 4.3MB total) — NOT downloaded photos: I cannot verify a stranger's licence from here, and generated art has a clean MIT one. New `monarch background pick` (Walker dmenu in-session, numbered prompt over SSH), refactored the shared candidate logic into bin/_background-lib.sh, bound Super+Ctrl+W. `theme apply` now auto-sets a theme's first wallpaper (fresh installs land on one). Migration 1786229066 regenerates keybinds + sets a default on existing installs. Reconciled the now-stale 'ships no wallpapers' comments. Still unbooted — hyprpaper has never rendered these.

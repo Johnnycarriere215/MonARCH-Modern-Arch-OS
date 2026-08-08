@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#DESC: Pick a wallpaper from a menu
+
+set -euo pipefail
+
+_src=${BASH_SOURCE[0]}
+while [[ -L "$_src" ]]; do
+  _dir=$(cd -P "$(dirname "$_src")" && pwd); _src=$(readlink "$_src")
+  [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+MONARCH_HOME=${MONARCH_HOME:-$(cd -P "$(dirname "$_src")/.." && pwd)}
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_theme-lib.sh"
+# shellcheck source=/dev/null
+source "$MONARCH_HOME/bin/_background-lib.sh"
+
+usage() {
+  cat <<'EOF'
+Choose a wallpaper from a list, rather than cycling to the next.
+
+Usage:
+  monarch background pick            menu (Walker in a session, else a prompt)
+  monarch background pick <n>        set the nth from `monarch background next --list`
+
+Bind it to a key if you switch often. `monarch background next` is the one for
+a quick change without stopping to choose.
+
+The list is the active theme's wallpapers followed by your own in
+~/.config/monarch/backgrounds. A picker is nicer than cycling once there are
+more than three or four.
+EOF
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+# Gather, and keep the full paths — the menu shows names, we set by path.
+images=(); labels=()
+while IFS= read -r f; do
+  images+=("$f")
+  # "midnight · aurora" reads better in a menu than a filename. Strip the
+  # monarch-<theme>- prefix and the numeric ordering, leave the style.
+  base=$(basename "$f"); base=${base%.*}
+  pretty=${base#monarch-}
+  pretty=${pretty//-/ }
+  labels+=("$pretty")
+done < <(background_candidates)
+
+if [[ ${#images[@]} -eq 0 ]]; then
+  warn "no wallpapers to choose from"
+  printf '\n'
+  background_help_where
+  exit 1
+fi
+
+# ---- pick by index, if given -------------------------------------------------
+
+if [[ -n "${1:-}" ]]; then
+  [[ "$1" =~ ^[0-9]+$ ]] || die "'$1' is not a number — run without an argument for a menu"
+  idx=$(( $1 - 1 ))
+  [[ $idx -ge 0 && $idx -lt ${#images[@]} ]] \
+    || die "$1 is out of range (1..${#images[@]})"
+  exec "$MONARCH_HOME/bin/monarch-background-set" "${images[$idx]}"
+fi
+
+# ---- menu --------------------------------------------------------------------
+
+choose() {
+  local prompt=$1; shift
+  local items=("$@")
+
+  # Walker in a session, its dmenu mode — the same launcher everything else
+  # uses, so the picker looks like the rest of the desktop.
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && have walker; then
+    printf '%s\n' "${items[@]}" | walker --dmenu -p "$prompt" 2>/dev/null
+    return
+  fi
+
+  # No session (or no walker): a numbered prompt on the terminal. Same command,
+  # works over SSH, works before the desktop is up.
+  local i
+  for i in "${!items[@]}"; do
+    printf '  %2d  %s\n' "$((i + 1))" "${items[i]}" >&2
+  done
+  printf 'wallpaper number: ' >&2
+  local n; read -r n
+  [[ "$n" =~ ^[0-9]+$ ]] && [[ $n -ge 1 && $n -le ${#items[@]} ]] \
+    || { err "not a valid choice"; return 1; }
+  printf '%s\n' "${items[$((n - 1))]}"
+}
+
+choice=$(choose "Wallpaper" "${labels[@]}") || exit 1
+[[ -n "$choice" ]] || { info "nothing picked"; exit 0; }
+
+# Map the chosen label back to its path.
+for i in "${!labels[@]}"; do
+  if [[ "${labels[i]}" == "$choice" ]]; then
+    exec "$MONARCH_HOME/bin/monarch-background-set" "${images[i]}"
+  fi
+done
+
+die "could not match '$choice' back to a file"

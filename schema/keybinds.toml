@@ -680,3 +680,11 @@ dispatcher = "exec"
 action = "monarch background next"
 group = "Appearance"
 label = "Next wallpaper"
+
+[[bind]]
+id = "background-pick"
+keys = "SUPER CTRL, W"
+dispatcher = "exec"
+action = "monarch background pick"
+group = "Appearance"
+label = "Pick a wallpaper"
