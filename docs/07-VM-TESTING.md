@@ -28,19 +28,18 @@ Firmware to `UEFI x86_64 ...OVMF...` there. It cannot be changed afterwards.
 
 ## 2. Install base Arch
 
-Boot the Arch ISO and run `archinstall`.
+**[docs/09-ARCH-INSTALL.md](09-ARCH-INSTALL.md) is the step-by-step**, menu item
+by menu item. It is written for someone who has never installed Arch.
 
-Answers that matter:
+The three answers that MonARCH depends on, so you can spot them going past:
 
-- **Filesystem: btrfs**, with subvolumes. `bootstrap.sh` checks for a Btrfs root
-  and stops without one — deliberately, because snapshots are the rollback plan.
-- **Bootloader:** anything for now. MonARCH targets Limine; Phase 4 owns that.
-- **Profile:** minimal. No desktop. MonARCH is the desktop.
-- **User:** create one, **with sudo**. Do not plan to run as root.
-- **Network:** NetworkManager, so the VM has a network on first boot.
-- **Audio:** pipewire.
+- **Filesystem: btrfs.** `bootstrap.sh` refuses anything else — snapshots are
+  the rollback plan.
+- **Profile: minimal.** No desktop environment. MonARCH is the desktop.
+- **User: with sudo.** `bootstrap.sh` refuses to run as root.
 
-Reboot, log in as your user, confirm `ping archlinux.org` works.
+Stop when you reach the end of §6 (first boot) in that document. Come back here
+before installing MonARCH — the snapshot below has to be taken first.
 
 ## 3. Snapshot it as `clean-arch` — before MonARCH
 

@@ -94,7 +94,9 @@ install/      staged install scripts, called by bootstrap.sh
 migrations/   timestamped one-shot upgrade scripts
 gui/          Tauri app
 brand/        ASCII art, Plymouth, greetd theme
-docs/         project documentation (07-VM-TESTING.md = how to test a build)
+docs/         project documentation. 09-ARCH-INSTALL.md = install base Arch,
+              07-VM-TESTING.md = test in a VM, 08-USB-INSTALL.md = daily-drive it
+              from an external drive without touching the internal disk
 bootstrap.sh  one-command install onto fresh Arch
 
 START-HERE.md  session protocol for AI assistants
