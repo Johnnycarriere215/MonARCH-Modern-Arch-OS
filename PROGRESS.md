@@ -19,6 +19,22 @@ Status values: `TODO` · `IN PROGRESS` · `PARTIAL` · `DONE` · `BLOCKED`
 
 ---
 
+## 2026-08-11 — Side quest: MonARCH features into Omarchy
+
+Per the human's request, two MonARCH-style features were designed and **implemented live into Omarchy** (the Arch + Hyprland desktop on this machine) — see `docs/OMARCHY-FEATURES-PROMPT.md`, which is the written prompt for the job.
+
+**Done, live and verified:**
+- Configurable monitor layouts — `~/.config/omarchy/monitors.toml` → generated `hypr/monitors.conf` + `workspace-pairs.conf` + `workspace-map.json`, hot-applied via `omarchy-monitor-apply`.
+- **Merged desktops** (`span = true`): every workspace is a virtual desktop across all monitors. Super+1..0 switch the whole desk together via `omarchy-workspace` (secondary monitors run mirror ids N+100, e.g. HDMI-A-1 shows 101 for desk 1). Verified live: desk 2 → VGA `2` / HDMI `102`, desk 1 → `1`/`101`.
+- **New monitors join the desk** — `omarchy-monitor-listen` (autostarted) re-applies layout and joins the screen to the current workspace instead of it becoming "workspace 2".
+- **Performance mode** — `omarchy-performance on|off|toggle|status`: blur/shadows/animations off + relaxed waybar polling; verified toggling both ways, configerrors clean.
+- **Monitors settings page** — Windows-like, theme-colored (stdlib Python server, port 18423, idle-exits), launched from Omarchy Menu → Setup → Monitors. Also: Menu → Toggle → Performance. Browser-verified.
+- **Edge-crossing window moves** (added 2026-08-11, second pass) — `omarchy-window-edge-move l/r/u/d`, bound to Super+Ctrl+Shift+arrows. If the focused window is at its monitor's edge in that direction with a monitor beyond, it crosses (Hyprland 0.56 uses `movewindow mon:<name>` — `movewindowtomonsilent` is gone); otherwise it falls back to native `movewindow D` so repeated presses walk across then over. Verified live both directions HDMI ↔ VGA. **Third pass:** an **Edge crossing toggle** on the Monitors settings page (`/api/edge-crossing` on the settings server → writes `~/.config/omarchy/edge-crossing`); the edge-move script no-ops when off. Verified: OFF blocks crossing, ON re-enables it, toggle renders on the page (browser-checked, no console errors). **Fourth pass:** the four binds now carry "Edge crossing: …" descriptions so they're findable in the `Super+K` keybindings learning tab (`omarchy-menu-keybindings` already reads descriptions dynamically from `hyprctl binds`; a priority rule was added to sort them with window-move entries).
+
+**Key constraint learned:** Hyprland can only show one workspace number on one monitor — a workspace literally cannot span two screens. The merged-desktop behavior ("Claude + Clickup in one workspace, on different monitors") is delivered with the mirror-id trick above.
+
+---
+
 ## Phase 0 — Baseline (human only, no AI)
 
 | | Task | Status |
